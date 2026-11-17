@@ -1,5 +1,6 @@
 import { randomBytes, randomInt, createHash, timingSafeEqual } from 'node:crypto';
 import { load, read, write, updateJson, readFolder, route, hashPin, weakPin, makeToken, tokenId, tokenValid, pinPath, ytId } from './_lib/store.js';
+import { otherBusy } from './_lib/busy.js';
 
 // Kids Ministry: families register and check in their children, staff run the rooms.
 // Children's details live only in the site's private storage, never in the code.
@@ -106,6 +107,19 @@ async function checkIn(date, fam, kidIds, rooms, by) {
   return code;
 }
 
+// The slots one Kids service needs: a teacher and an assistant for each room, plus the check-in desk.
+function slotsFor(rooms) {
+  const slots = [];
+  for (const r of rooms) {
+    slots.push({ id: newId(), roomId: r.id, role: 'teacher', label: `${r.name} teacher`, personId: '' });
+    slots.push({ id: newId(), roomId: r.id, role: 'assistant', label: `${r.name} assistant`, personId: '' });
+  }
+  slots.push({ id: newId(), roomId: '', role: 'checkin', label: 'Check-in desk', personId: '' });
+  return slots;
+}
+// Which Kids roles can fill which slot, best match first.
+const FITS = { teacher: ['teacher', 'lead'], assistant: ['assistant', 'teacher', 'lead'], checkin: ['checkin', 'assistant', 'lead'] };
+
 async function chatOf(fid) { return (await read(chatPath(fid))) || { messages: [], staffSeen: '', parentSeen: '' }; }
 async function addMessage(fid, from, name, body) {
   const msg = text(body, 500);
@@ -137,7 +151,7 @@ async function parentView(fam) {
 
 async function staffView(staff, people) {
   const date = today();
-  const [{ rooms, label }, families, days, chats, materials] = await Promise.all([settings(), readFolder('kids/families/'), readFolder('kids/checkins/'), readFolder('kids/chat/'), read('kids/materials.json')]);
+  const [{ rooms, label }, families, days, chats, materials, sched, busy] = await Promise.all([settings(), readFolder('kids/families/'), readFolder('kids/checkins/'), readFolder('kids/chat/'), read('kids/materials.json'), read('kids/schedule.json'), otherBusy('kids')]);
   const fams = Object.values(families).filter((f) => f.id);
   const day = days[date] || {};
   const kidInfo = {};
@@ -157,6 +171,9 @@ async function staffView(staff, people) {
     families: fams.map((f) => ({ id: f.id, parent: f.parent, phone: f.phone, hasPin: !!f.hash, adults: f.adults || [], code: day.codes?.[f.id] || '', kids: f.kids.map((k) => ({ ...k, age: ageOn(k.birth, date), roomId: roomFor(k, rooms, date).id })) })).sort((a, b) => a.parent.localeCompare(b.parent)),
     chats: fams.map((f) => { const c = chats[f.id] || {}; const m = c.messages || []; return { fid: f.id, parent: f.parent, kids: f.kids.map((k) => k.name).join(', '), messages: m, unread: m.some((x) => x.from === 'parent' && x.at > (c.staffSeen || '')), last: m[m.length - 1]?.at || '' }; }).filter((c) => c.messages.length || day.codes?.[c.fid]),
     materials: materials || {},
+    schedule: (sched?.services || []).sort((a, b) => a.date.localeCompare(b.date)),
+    busy,
+    team: people.filter((p) => p.kids).map((p) => ({ id: p.id, name: p.name, role: p.kids.role })),
     attendance: { perDate: perDate.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 60), perKid },
     staff: manager ? people.map((p) => ({ id: p.id, name: p.name, kids: p.kids || null, media: Object.keys(p.roles || {}).length > 0 })) : [],
   };
@@ -249,7 +266,7 @@ export default route(async (req, res, body) => {
   }
   if (!staff) { await new Promise((r) => setTimeout(r, 400)); return bad(res, 401, 'Kids Ministry is for Kids Team volunteers. Ask your leader for access.'); }
   const manager = staff.level === 'admin' || staff.level === 'lead';
-  const managerOnly = ['setRooms', 'setStaff', 'addStaff', 'setLabel', 'famDelete'];
+  const managerOnly = ['setRooms', 'setStaff', 'addStaff', 'setLabel', 'famDelete', 'schedMonth', 'schedService', 'schedRemove', 'schedSlot', 'schedFill'];
   if (managerOnly.includes(action) && !manager) return bad(res, 403, 'Only a Kids Ministry leader can change this.');
 
   if (FAMILY_ACTIONS.includes(action)) {
@@ -330,6 +347,66 @@ export default route(async (req, res, body) => {
     })).filter((r) => r.name && r.max >= r.min);
     if (!rooms.length) return bad(res, 400, 'Keep at least one room.');
     await updateJson('kids/settings.json', (s) => { s.rooms = rooms; });
+  } else if (action === 'schedMonth' || action === 'schedService') {
+    const { rooms } = await settings();
+    const dates = [];
+    if (action === 'schedService') {
+      if (!/^\d{4}-\d\d-\d\d$/.test(body.date || '') || Number.isNaN(Date.parse(body.date))) return bad(res, 400, 'Pick the service date.');
+      dates.push(body.date);
+    } else {
+      if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(body.month || '')) return bad(res, 400, 'Pick a month first.');
+      const [y, m] = body.month.split('-').map(Number);
+      const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+      // Kids Ministry meets on Saturdays and Sundays. Other dates are added as special services.
+      for (let d = 1; d <= last; d++) {
+        const day = `${body.month}-${String(d).padStart(2, '0')}`;
+        if (day >= date && [6, 0].includes(new Date(Date.UTC(y, m - 1, d)).getUTCDay())) dates.push(day);
+      }
+      if (!dates.length) return bad(res, 400, 'That month has no Saturdays or Sundays left.');
+    }
+    await updateJson('kids/schedule.json', (sc) => {
+      sc.services = sc.services || [];
+      for (const d of dates) {
+        if (action === 'schedMonth' && sc.services.some((x) => x.date === d)) continue;
+        sc.services.push({ id: newId(), date: d, title: action === 'schedService' ? text(body.title, 60) || 'Special service' : '', slots: slotsFor(rooms) });
+      }
+    });
+  } else if (action === 'schedRemove') {
+    await updateJson('kids/schedule.json', (sc) => { sc.services = (sc.services || []).filter((x) => x.id !== body.id); });
+  } else if (action === 'schedSlot') {
+    const person = body.personId ? people.find((p) => p.id === body.personId && p.kids) : null;
+    if (body.personId && !person) return bad(res, 400, 'Pick someone on the Kids Team.');
+    const busy = await otherBusy('kids');
+    let result = 'missing';
+    await updateJson('kids/schedule.json', (sc) => {
+      const svc = (sc.services || []).find((x) => x.id === body.serviceId);
+      const slot = svc?.slots.find((x) => x.id === body.slotId);
+      if (!slot) return;
+      if (person && busy[svc.date]?.[person.id]) { result = busy[svc.date][person.id]; return; }
+      if (person && svc.slots.some((x) => x !== slot && x.personId === person.id)) { result = 'twice'; return; }
+      slot.personId = person ? person.id : '';
+      result = 'ok';
+    });
+    if (result === 'missing') return bad(res, 404, 'That slot is no longer here.');
+    if (result === 'twice') return bad(res, 409, `${person.name} already has a spot in this service.`);
+    if (result !== 'ok') return bad(res, 409, `${person.name} is already serving that day (${result}). Pick someone else, or free them up there first.`);
+  } else if (action === 'schedFill') {
+    const [busy, off] = await Promise.all([otherBusy('kids'), readFolder('off/')]);
+    const today10 = new Date().toISOString().slice(0, 10);
+    const team = people.filter((p) => p.kids);
+    await updateJson('kids/schedule.json', (sc) => {
+      const counts = {};
+      for (const svc of sc.services || []) for (const sl of svc.slots) if (sl.personId) counts[sl.personId] = (counts[sl.personId] || 0) + 1;
+      for (const svc of (sc.services || []).filter((x) => x.date >= today10).sort((a, b) => a.date.localeCompare(b.date))) {
+        for (const slot of svc.slots) {
+          if (slot.personId) continue;
+          const free = team.filter((p) => !busy[svc.date]?.[p.id] && !off[p.id]?.[svc.date] && !svc.slots.some((x) => x.personId === p.id));
+          const pick = free.filter((p) => FITS[slot.role].includes(p.kids.role))
+            .sort((a, b) => FITS[slot.role].indexOf(a.kids.role) - FITS[slot.role].indexOf(b.kids.role) || (counts[a.id] || 0) - (counts[b.id] || 0))[0];
+          if (pick) { slot.personId = pick.id; counts[pick.id] = (counts[pick.id] || 0) + 1; }
+        }
+      }
+    });
   } else if (action === 'setLabel') {
     const l = body.label || {};
     const label = { header: text(l.header, 40), footer: text(l.footer, 60) };

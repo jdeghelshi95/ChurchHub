@@ -1,5 +1,6 @@
 import { randomBytes, randomInt, createHash, timingSafeEqual } from 'node:crypto';
 import { load, read, write, updateJson, route, tokenId, tokenValid, pinPath, ytId } from './_lib/store.js';
+import { otherBusy } from './_lib/busy.js';
 
 // Band: members, songs with charts and tabs, and a setlist for each service.
 
@@ -13,9 +14,9 @@ const FILE_TYPES = ['application/pdf', 'image/png', 'image/jpeg'];
 const MAX_FILE = 4_000_000; // characters of base64, about 3 MB
 
 async function view(me, people, editor) {
-  const [songs, sets] = await Promise.all([read('band/songs.json'), read('band/sets.json')]);
+  const [songs, sets, busy] = await Promise.all([read('band/songs.json'), read('band/sets.json'), otherBusy('band')]);
   return {
-    me, editor,
+    me, editor, busy,
     today: new Date().toISOString().slice(0, 10),
     members: people.filter((p) => p.band).map((p) => ({ id: p.id, name: p.name, role: p.band.role, part: p.band.part || '' })).sort((a, b) => a.name.localeCompare(b.name)),
     others: editor ? people.filter((p) => !p.band).map((p) => ({ id: p.id, name: p.name })) : [],
@@ -114,15 +115,22 @@ export default route(async (req, res, body) => {
     await updateJson('band/sets.json', (d) => { d.items = (d.items || []).filter((x) => x.id !== body.id); });
   } else if (action === 'setSongs' || action === 'setPlayers') {
     const songIds = new Set(((await read('band/songs.json'))?.items || []).map((x) => x.id));
-    let found = false;
+    const busy = action === 'setPlayers' ? await otherBusy('band') : {};
+    let found = false, clash = '';
     await updateJson('band/sets.json', (d) => {
       const s = d.items?.find((x) => x.id === body.setId);
       if (!s) return;
       found = true;
       if (action === 'setSongs') s.songs = (Array.isArray(body.songs) ? body.songs : []).filter((id) => songIds.has(id)).slice(0, 30);
-      else s.players = (Array.isArray(body.players) ? body.players : []).filter((p) => people.some((x) => x.id === p.id && x.band)).slice(0, 30).map((p) => ({ id: p.id, part: text(p.part, 40) }));
+      else {
+        const players = (Array.isArray(body.players) ? body.players : []).filter((p) => people.some((x) => x.id === p.id && x.band)).slice(0, 30).map((p) => ({ id: p.id, part: text(p.part, 40) }));
+        const hit = players.find((p) => busy[s.date]?.[p.id] && !s.players.some((x) => x.id === p.id));
+        if (hit) { clash = `${people.find((x) => x.id === hit.id).name} is already serving that day (${busy[s.date][hit.id]}).`; return; }
+        s.players = players;
+      }
     });
     if (!found) return bad(res, 404, 'That service is no longer here.');
+    if (clash) return bad(res, 409, clash);
   } else if (action !== 'load') {
     return bad(res, 400, 'Unknown action.');
   }

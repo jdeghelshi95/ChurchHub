@@ -91,6 +91,7 @@ function memberView(){
   app.innerHTML=`${V.data.username?'':`<div class="alert" role="alert"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2.5 20h19zM12 10v4.5M12 17.5v.01"/></svg><span>You don\u2019t have a username yet. Create one to sign in more easily.</span><button id="goname">Create username</button></div>`}<div class="top"><div><p class="muted">${APP_NAME}</p><h1>${esc(me.name)}</h1></div><div class="row">${V.data.kids?'<button id="kidsbtn">Kids Ministry</button>':''}${V.data.band?'<button id="bandbtn">Band</button>':''}${V.data.access?'<button class="primary" id="dash">Team dashboard</button>':''}<button class="link" id="out">Sign out</button></div></div>
   <div class="tabs"><button data-v="schedule" aria-pressed="${V.view!=='guides'}">My schedule</button><button data-v="guides" aria-pressed="${V.view==='guides'}">Guides</button></div>
   ${V.view==='guides'?myGuides():`${V.data.shirt?'':shirtBox()}
+  ${V.data.other?.length?`<section class="panel"><h2>My other ministries</h2><p class="small muted">Dates you serve outside Production. You won\u2019t be scheduled in two places on the same day.</p>${V.data.other.map(x=>`<div class="row"><span class="grow"><b>${dayName(x.date)}</b></span><span class="pill yes">${esc(x.what)}</span></div>`).join('')}</section>`:''}
   ${!months.length?`<section class="panel"><h2>No schedule posted yet</h2><p class="muted">Check back once your leader posts the next month.</p></section>`:`
   <section class="panel"><div class="top"><h2>My dates</h2>${upcoming.length?`<span class="pill ${replied===upcoming.length?'yes':'wait'}">${replied} of ${upcoming.length} answered</span>`:''}</div>
   ${upcoming.length?upcoming.map(cue).join(''):`<p class="muted">You have no upcoming dates.</p>`}</section>
@@ -217,17 +218,17 @@ function wrongDay(id,date,role){const p=id&&person(id);return !!p&&!picked(p,GRO
 function candidates(s,role){
   const g=GROUP[role],cur=s.slots[role];const on=Object.values(s.slots);const counts={};
   for(const x of L.data.months[L.month].services)for(const id of Object.values(x.slots))if(id)counts[id]=(counts[id]||0)+1;
-  const free=[],other=[],cant=[],busy=[];
+  const free=[],other=[],cant=[],busy=[],away=[];const gone=L.data.busy?.[s.date]||{};
   for(const p of L.data.people){if(!p.roles[g])continue;
-    (saidNo(p.id,s.date)?cant:p.id!==cur&&on.includes(p.id)?busy:picked(p,g,s.date)?free:other).push(p)}
+    (gone[p.id]&&p.id!==cur?away:saidNo(p.id,s.date)?cant:p.id!==cur&&on.includes(p.id)?busy:picked(p,g,s.date)?free:other).push(p)}
   free.sort((a,b)=>(counts[a.id]||0)-(counts[b.id]||0));
-  return {free,other,cant,busy,counts}}
+  return {free,other,cant,busy,away,gone,counts}}
 function slotSelect(s,role){
-  const cur=s.slots[role];const {free,other,cant,busy,counts}=candidates(s,role);
+  const cur=s.slots[role];const {free,other,cant,busy,away,gone,counts}=candidates(s,role);
   const opt=(p,mark,tag)=>`<option value="${p.id}"${p.id===cur?' selected':''}>${mark} ${esc(p.name)}${tag?' '+tag:''}</option>`;
   const grp=(label,list,mark,n)=>list.length?`<optgroup label="${label}">${list.map(p=>opt(p,mark,n?`(${counts[p.id]||0} this month)`:'')).join('')}</optgroup>`:'';
   return `<select data-slot data-d="${s.date}" data-r="${esc(role)}" aria-label="${esc(role)} on ${dayName(s.date)}"><option value="">Open</option>
-  ${grp('Available this day',free,'\u2705',1)}${grp('Didn\u2019t pick '+weekday(s.date)+'s (last resort)',other,'\u26a0\ufe0f')}${grp('Can\u2019t serve this day',cant,'\u274c')}${grp('Already serving this day',busy,'\u2796')}</select>`}
+  ${grp('Available this day',free,'\u2705',1)}${grp('Didn\u2019t pick '+weekday(s.date)+'s (last resort)',other,'\u26a0\ufe0f')}${grp('Can\u2019t serve this day',cant,'\u274c')}${grp('Already serving this day',busy,'\u2796')}${away.length?`<optgroup label="Serving in another ministry that day">${away.map(p=>`<option disabled>\u26d4 ${esc(p.name)} (${esc(gone[p.id])})</option>`).join('')}</optgroup>`:''}</select>`}
 function statusPill(a,open,wrong){if(open)return '<span class="pill no">Open</span>';if(a?.a==='no')return `<span class="pill no">${XIC}Can’t</span>`;
   if(wrong)return '<span class="pill wait">Not their day</span>';
   return a?`<span class="pill yes">${CHK}Serving</span>`:'<span class="pill wait">No reply</span>'}

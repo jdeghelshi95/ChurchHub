@@ -232,6 +232,35 @@ function attendanceTab() {
   return `<section class="panel"><h2>By service</h2>${attendance.perDate.map((d) => `<div class="row"><span class="grow">${dayName(d.date)}</span><b>${d.count}</b></div>`).join('') || '<p class="muted">No check-ins yet.</p>'}</section>
   <section class="panel"><h2>By child</h2><div class="scroll"><table class="st"><thead><tr><th></th><th>Child</th><th>Visits</th><th>Last here</th><th>Parent</th></tr></thead><tbody>${kids.map((k, i) => `<tr><td class="rank">${i + 1}</td><td>${esc(k.name)}</td><td class="hot vP">${k.n}</td><td>${short(k.last)}</td><td>${esc(k.parent)}</td></tr>`).join('')}</tbody></table></div>${kids.length ? '' : '<p class="muted">No children registered yet.</p>'}</section>`;
 }
+// The Kids volunteer schedule. Leaders fill it under Admin; everyone on the team reads it under Teachers.
+function schedTab(edit) {
+  const { schedule, team, busy, date, me } = K.data;
+  const up = schedule.filter((x) => x.date >= date);
+  const nameOf = (id) => team.find((p) => p.id === id)?.name || 'Former volunteer';
+  const short = { lead: 'Lead', teacher: 'Teacher', assistant: 'Assistant', checkin: 'Check-in' };
+  const picker = (svc, slot) => {
+    const away = busy[svc.date] || {};
+    const here = (p) => svc.slots.some((x) => x !== slot && x.personId === p.id);
+    const free = team.filter((p) => !away[p.id] || p.id === slot.personId);
+    const gone = team.filter((p) => away[p.id] && p.id !== slot.personId);
+    return `<select data-svc="${svc.id}" data-slot="${slot.id}" aria-label="${esc(slot.label)} on ${dayName(svc.date)}"><option value="">Open</option>
+    <optgroup label="Kids Team">${free.map((p) => `<option value="${p.id}"${p.id === slot.personId ? ' selected' : ''}${here(p) ? ' disabled' : ''}>${esc(p.name)} \u00b7 ${short[p.role]}${here(p) ? ' (already in this service)' : ''}</option>`).join('')}</optgroup>
+    ${gone.length ? `<optgroup label="Serving in another ministry that day">${gone.map((p) => `<option disabled>${esc(p.name)} (${esc(away[p.id])})</option>`).join('')}</optgroup>` : ''}</select>`;
+  };
+  const card = (svc) => {
+    const open = svc.slots.filter((x) => !x.personId).length;
+    return `<section class="panel"><div class="top"><div><h2>${dayName(svc.date)}</h2>${svc.title ? `<div class="muted">${esc(svc.title)}</div>` : ''}</div><span class="pill ${open ? 'wait' : 'yes'}">${open ? open + ' open' : CHK + 'Full'}</span></div>
+    ${svc.slots.map((slot) => `<div class="slot" style="grid-template-columns:minmax(0,1fr) minmax(0,1.2fr)"><span>${esc(slot.label)}</span>${edit ? picker(svc, slot) : `<span class="${slot.personId === me.id ? 'me' : ''}">${slot.personId ? esc(nameOf(slot.personId)) : '<span class="err">Open</span>'}</span>`}</div>`).join('')}
+    ${edit ? `<button class="link small" data-delsvc="${svc.id}" style="justify-self:start">Delete this service</button>` : ''}</section>`;
+  };
+  const mine = up.filter((x) => x.slots.some((y) => y.personId === me.id));
+  const head = edit ? `<section class="panel"><h2>Build the Kids schedule</h2><p class="small muted">A month adds every Saturday and Sunday. Each service gets a teacher and an assistant for every room, plus the check-in desk. Anyone already serving in Production or Band that day can\u2019t be picked here, and the other ministries can\u2019t pick someone you schedule.</p>
+  <form class="row" id="smonth"><input id="smon" type="month" class="grow" aria-label="Month" required><button class="primary">Add month</button></form>
+  <form class="row" id="sspecial"><input id="sdate" type="date" aria-label="Special service date" required><input id="stitle2" class="grow" placeholder="Special service name" maxlength="60" aria-label="Special service name"><button>Add special service</button></form>
+  ${up.some((x) => x.slots.some((y) => !y.personId)) ? '<button id="sfill">Fill open spots automatically</button>' : ''}</section>`
+    : `<section class="panel"><h2>My Kids dates</h2>${mine.map((x) => `<div class="row"><span class="grow"><b>${dayName(x.date)}</b>${x.title ? ' \u00b7 ' + esc(x.title) : ''}</span><span class="pill yes">${esc(x.slots.find((y) => y.personId === me.id).label)}</span></div>`).join('') || '<p class="muted">You aren\u2019t scheduled on any upcoming Kids services.</p>'}</section>`;
+  return `${head}${up.map(card).join('') || '<section class="panel"><p class="muted">No upcoming Kids services on the schedule yet.</p></section>'}`;
+}
 function familiesTab() {
   const { families, rooms } = K.data;
   const f = families.find((x) => x.id === K.prof);
@@ -282,11 +311,19 @@ function roomsTab() {
 function kidsView() {
   const { me, date, chats } = K.data;
   const unread = chats.filter((c) => c.unread).length;
-  const tabs = [['today', 'Rooms and pickup'], ['desk', 'Check-in desk'], ['families', 'Families'], ['chat', 'Messages' + (unread ? ` (${unread})` : '')], ['materials', 'Teaching material'], ['att', 'Attendance'], ...(isLead() ? [['staff', 'Staff'], ['setup', 'Rooms and labels']] : [])];
-  if (!tabs.some((t) => t[0] === K.tab)) K.tab = 'today';
-  const body = K.tab === 'desk' ? deskTab() : K.tab === 'chat' ? chatTab() : K.tab === 'materials' ? materialsTab() : K.tab === 'att' ? attendanceTab() : K.tab === 'setup' ? roomsTab() : K.tab === 'families' ? familiesTab() : K.tab === 'staff' ? staffTab() : todayTab();
+  const groups = [
+    ['Teachers', [['today', 'Rooms and pickup'], ['sched', 'Schedule'], ['materials', 'Teaching material']]],
+    ['Check-in', [['desk', 'Check-in desk'], ['att', 'Attendance']]],
+    ['Parents', [['families', 'Families'], ['chat', 'Messages' + (unread ? ` (${unread})` : '')]]],
+    ...(isLead() ? [['Admin', [['staff', 'Staff'], ['plan', 'Build schedule'], ['setup', 'Rooms and labels']]]] : []),
+  ];
+  if (!groups.some((g) => g[1].some((t) => t[0] === K.tab))) K.tab = 'today';
+  const group = groups.find((g) => g[1].some((t) => t[0] === K.tab));
+  const tabs = group[1];
+  const body = K.tab === 'desk' ? deskTab() : K.tab === 'chat' ? chatTab() : K.tab === 'materials' ? materialsTab() : K.tab === 'att' ? attendanceTab() : K.tab === 'setup' ? roomsTab() : K.tab === 'families' ? familiesTab() : K.tab === 'staff' ? staffTab() : K.tab === 'sched' ? schedTab(false) : K.tab === 'plan' ? schedTab(true) : todayTab();
   app.innerHTML = `<div class="top"><div><p class="muted">Kids Ministry · ${esc(ROLE_LABEL[me.level] || '')}</p><h1>${dayName(date)}</h1></div>${isLead() ? '' : '<div class="row"><button id="kleave">Back to my schedule</button></div>'}</div>
-  ${isLead() ? ministryBar('kids') : ''}<div class="subs">${tabs.map(([t, l]) => `<button data-kt="${t}" aria-pressed="${K.tab === t}">${l}</button>`).join('')}</div>${body}<div id="printarea" aria-hidden="true"></div>`;
+  ${isLead() ? ministryBar('kids') : ''}<nav class="groups cats" aria-label="Kids Ministry sections">${groups.map(([name, list]) => `<button data-kt="${list[0][0]}" aria-pressed="${name === group[0]}">${name}${name === 'Parents' && unread ? ' \u2022' : ''}</button>`).join('')}</nav>
+  <div class="subs">${tabs.map(([t, l]) => `<button data-kt="${t}" aria-pressed="${K.tab === t}">${l}</button>`).join('')}</div>${body}<div id="printarea" aria-hidden="true"></div>`;
   const kl = document.getElementById('kleave'); if (kl) kl.onclick = () => { location.hash = ''; };
   bindMinistryBar();
   app.querySelectorAll('[data-kt]').forEach((b) => b.onclick = () => { K.tab = b.dataset.kt; K.kidEdit = null; kidsView(); scrollTo(0, 0); });
@@ -317,6 +354,12 @@ function kidsView() {
   // Teaching material
   on('mform', (e) => { e.preventDefault(); kidsCall({ action: 'addMaterial', roomId: kval('mroom'), title: kval('mtitle'), url: kval('murl'), note: kval('mnote') }, 'Material added.'); });
   each('[data-delm]', (b) => b.onclick = () => { if (b.dataset.sure) return kidsCall({ action: 'removeMaterial', roomId: b.dataset.room, id: b.dataset.delm }, 'Removed.'); b.dataset.sure = '1'; b.textContent = 'Tap again to remove'; });
+  // Schedule
+  on('smonth', (e) => { e.preventDefault(); kidsCall({ action: 'schedMonth', month: kval('smon') }, 'Month added. Pick people, or fill the open spots.'); });
+  on('sspecial', (e) => { e.preventDefault(); kidsCall({ action: 'schedService', date: kval('sdate'), title: kval('stitle2') }, 'Special service added.'); });
+  on('sfill', () => kidsCall({ action: 'schedFill' }, 'Filled every spot it could.'));
+  each('[data-slot]', (sel) => sel.onchange = () => kidsCall({ action: 'schedSlot', serviceId: sel.dataset.svc, slotId: sel.dataset.slot, personId: sel.value }, 'Saved.'));
+  each('[data-delsvc]', (b) => b.onclick = () => { if (b.dataset.sure) return kidsCall({ action: 'schedRemove', id: b.dataset.delsvc }, 'Service deleted.'); b.dataset.sure = '1'; b.textContent = 'Tap again to delete'; });
   // Families
   const fam = (b, msg) => kidsCall({ ...b, fid: K.prof }, msg);
   const fq = document.getElementById('fq');
