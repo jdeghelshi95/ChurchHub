@@ -52,8 +52,37 @@ function cleanKid(input, date) {
     },
   };
 }
-const publicFamily = ({ salt, hash, fails, lockUntil, ...f }) => f;
-const settings = async () => { const s = (await read('kids/settings.json')) || {}; return { rooms: s.rooms?.length ? s.rooms : DEFAULT_ROOMS }; };
+const publicFamily = ({ salt, hash, fails, lockUntil, ...f }) => ({ adults: [], ...f, hasPin: !!hash });
+const DEFAULT_LABEL = { header: '', footer: '', age: true, room: true, allergy: true, medical: false, parent: false, date: true, big: false };
+const settings = async () => { const s = (await read('kids/settings.json')) || {}; return { rooms: s.rooms?.length ? s.rooms : DEFAULT_ROOMS, label: { ...DEFAULT_LABEL, ...(s.label || {}) } }; };
+
+// Changes to one family's profile. Parents use these on their own family, and Kids Team staff on any family.
+const FAMILY_ACTIONS = ['saveKid', 'removeKid', 'saveFamily', 'addAdult', 'removeAdult'];
+function editFamily(action, fam, body, date) {
+  fam.adults = fam.adults || [];
+  if (action === 'saveKid') {
+    const { kid, error } = cleanKid(body.kid, date);
+    if (error) return error;
+    const old = fam.kids.find((k) => k.id === body.kid.id);
+    if (old) Object.assign(old, kid);
+    else if (fam.kids.length >= MAX_KIDS) return `A family can have up to ${MAX_KIDS} children.`;
+    else fam.kids.push({ id: newId(), ...kid });
+  } else if (action === 'removeKid') {
+    fam.kids = fam.kids.filter((k) => k.id !== body.kidId);
+  } else if (action === 'saveFamily') {
+    const parent = text(body.parent, 60);
+    if (!parent) return 'Enter the parent\u2019s name.';
+    fam.parent = parent;
+  } else if (action === 'addAdult') {
+    const name = text(body.name, 60);
+    if (!name) return 'Enter the adult\u2019s name.';
+    if (fam.adults.length >= 6) return 'A family can have up to 6 other adults.';
+    fam.adults.push({ id: newId(), name, relation: text(body.relation, 40), phone: phoneOf(body.phone) });
+  } else if (action === 'removeAdult') {
+    fam.adults = fam.adults.filter((a) => a.id !== body.adultId);
+  }
+  return '';
+}
 
 // Checks kids in for a date. Everyone in one family shares one pickup code for the day.
 async function checkIn(date, fam, kidIds, rooms, by) {
@@ -108,11 +137,11 @@ async function parentView(fam) {
 
 async function staffView(staff, people) {
   const date = today();
-  const [{ rooms }, families, days, chats, materials] = await Promise.all([settings(), readFolder('kids/families/'), readFolder('kids/checkins/'), readFolder('kids/chat/'), read('kids/materials.json')]);
+  const [{ rooms, label }, families, days, chats, materials] = await Promise.all([settings(), readFolder('kids/families/'), readFolder('kids/checkins/'), readFolder('kids/chat/'), read('kids/materials.json')]);
   const fams = Object.values(families).filter((f) => f.id);
   const day = days[date] || {};
   const kidInfo = {};
-  for (const f of fams) for (const k of f.kids) kidInfo[k.id] = { ...k, age: ageOn(k.birth, date), parent: f.parent, phone: f.phone, pickup: f.pickup || '' };
+  for (const f of fams) for (const k of f.kids) kidInfo[k.id] = { ...k, age: ageOn(k.birth, date), parent: f.parent, phone: f.phone, pickup: (f.adults || []).map((a) => a.name).join(', ') };
   const perKid = {};
   const perDate = [];
   for (const [d, file] of Object.entries(days)) {
@@ -122,14 +151,14 @@ async function staffView(staff, people) {
   }
   const manager = staff.level === 'admin' || staff.level === 'lead';
   return {
-    me: staff, date, rooms,
+    me: staff, date, rooms, label,
     entries: Object.values(day.entries || {}).map((e) => ({ ...e, info: kidInfo[e.kidId] || null })),
     reminders: day.reminders || {},
-    families: fams.map((f) => ({ id: f.id, parent: f.parent, phone: f.phone, code: day.codes?.[f.id] || '', kids: f.kids.map((k) => ({ id: k.id, name: k.name, age: ageOn(k.birth, date), roomId: roomFor(k, rooms, date).id, allergies: k.allergies })) })),
+    families: fams.map((f) => ({ id: f.id, parent: f.parent, phone: f.phone, hasPin: !!f.hash, adults: f.adults || [], code: day.codes?.[f.id] || '', kids: f.kids.map((k) => ({ ...k, age: ageOn(k.birth, date), roomId: roomFor(k, rooms, date).id })) })).sort((a, b) => a.parent.localeCompare(b.parent)),
     chats: fams.map((f) => { const c = chats[f.id] || {}; const m = c.messages || []; return { fid: f.id, parent: f.parent, kids: f.kids.map((k) => k.name).join(', '), messages: m, unread: m.some((x) => x.from === 'parent' && x.at > (c.staffSeen || '')), last: m[m.length - 1]?.at || '' }; }).filter((c) => c.messages.length || day.codes?.[c.fid]),
     materials: materials || {},
     attendance: { perDate: perDate.sort((a, b) => b.date.localeCompare(a.date)).slice(0, 60), perKid },
-    staff: manager ? people.map((p) => ({ id: p.id, name: p.name, kids: p.kids || null })) : [],
+    staff: manager ? people.map((p) => ({ id: p.id, name: p.name, kids: p.kids || null, media: Object.keys(p.roles || {}).length > 0 })) : [],
   };
 }
 
@@ -150,7 +179,7 @@ export default route(async (req, res, body) => {
     await updateJson('kids/index.json', (ix) => { if (ix[phone]) taken = true; else ix[phone] = id; });
     if (taken) return bad(res, 409, 'That number is already registered. Sign in instead.');
     const salt = randomBytes(16).toString('hex');
-    const fam = { id, parent, phone, pickup: '', kids: [], createdAt: new Date().toISOString(), salt, hash: hashPin(pin, salt) };
+    const fam = { id, parent, phone, adults: [], kids: [], createdAt: new Date().toISOString(), salt, hash: hashPin(pin, salt) };
     await write(famPath(id), fam);
     return res.json({ token: makeToken('fam-' + id, salt), ...(await parentView(fam)) });
   }
@@ -159,7 +188,17 @@ export default route(async (req, res, body) => {
     const id = phone && (await read('kids/index.json'))?.[phone];
     const fam = id ? await read(famPath(id)) : null;
     const now = Date.now();
-    if (!fam?.hash) { await new Promise((r) => setTimeout(r, 400)); return bad(res, 401, 'We couldn’t find that number. Check it, or register your family.'); }
+    if (fam?.id && !fam.hash) {
+      // The Kids Team made this profile at the desk. The parent finishes it by choosing a PIN.
+      const pin = String(body.pin || '');
+      if (!body.claim) return bad(res, 409, 'Your family is already on file. Choose a PIN to finish setting up.');
+      if (weakPin(pin)) return bad(res, 400, 'Use 4 to 6 digits, and avoid easy ones like 1111 or 1234.');
+      fam.salt = randomBytes(16).toString('hex');
+      fam.hash = hashPin(pin, fam.salt);
+      await write(famPath(id), fam);
+      return res.json({ token: makeToken('fam-' + id, fam.salt), ...(await parentView(fam)) });
+    }
+    if (!fam?.hash) { await new Promise((r) => setTimeout(r, 400)); return bad(res, 401, 'We couldn\u2019t find that number. Check it, or register your family.'); }
     if (fam.lockUntil > now) return bad(res, 429, 'Too many wrong PINs. Wait 15 minutes and try again.');
     if (hashPin(String(body.pin || ''), fam.salt) !== fam.hash) {
       const fails = (fam.fails || 0) + 1;
@@ -178,22 +217,9 @@ export default route(async (req, res, body) => {
     if (!fam || !tokenValid(parentToken, fam.salt)) return bad(res, 401, 'Please sign in again.');
     const save = () => write(famPath(fam.id), fam);
 
-    if (action === 'saveKid') {
-      const { kid, error } = cleanKid(body.kid, date);
+    if (FAMILY_ACTIONS.includes(action)) {
+      const error = editFamily(action, fam, body, date);
       if (error) return bad(res, 400, error);
-      const old = fam.kids.find((k) => k.id === body.kid.id);
-      if (old) Object.assign(old, kid);
-      else if (fam.kids.length >= MAX_KIDS) return bad(res, 400, `You can add up to ${MAX_KIDS} children.`);
-      else fam.kids.push({ id: newId(), ...kid });
-      await save();
-    } else if (action === 'removeKid') {
-      fam.kids = fam.kids.filter((k) => k.id !== body.kidId);
-      await save();
-    } else if (action === 'saveFamily') {
-      const parent = text(body.parent, 60);
-      if (!parent) return bad(res, 400, 'Enter your name.');
-      fam.parent = parent;
-      fam.pickup = text(body.pickup, 200);
       await save();
     } else if (action === 'checkin') {
       const ids = (Array.isArray(body.kidIds) ? body.kidIds : []).filter((k) => fam.kids.some((x) => x.id === k));
@@ -223,10 +249,33 @@ export default route(async (req, res, body) => {
   }
   if (!staff) { await new Promise((r) => setTimeout(r, 400)); return bad(res, 401, 'Kids Ministry is for Kids Team volunteers. Ask your leader for access.'); }
   const manager = staff.level === 'admin' || staff.level === 'lead';
-  const managerOnly = ['setRooms', 'setStaff'];
+  const managerOnly = ['setRooms', 'setStaff', 'addStaff', 'setLabel', 'famDelete'];
   if (managerOnly.includes(action) && !manager) return bad(res, 403, 'Only a Kids Ministry leader can change this.');
 
-  if (action === 'scheckin') {
+  if (FAMILY_ACTIONS.includes(action)) {
+    const fam = /^[0-9a-f]{12}$/.test(body.fid || '') ? await read(famPath(body.fid)) : null;
+    if (!fam?.id) return bad(res, 404, 'Family not found.');
+    const error = editFamily(action, fam, body, date);
+    if (error) return bad(res, 400, error);
+    await write(famPath(fam.id), fam);
+  } else if (action === 'famCreate') {
+    const parent = text(body.parent, 60);
+    const phone = phoneOf(body.phone);
+    if (!parent) return bad(res, 400, 'Enter the parent\u2019s name.');
+    if (!phone) return bad(res, 400, 'Enter a 10-digit mobile number.');
+    const id = newId();
+    let taken = false;
+    await updateJson('kids/index.json', (ix) => { if (ix[phone]) taken = true; else ix[phone] = id; });
+    if (taken) return bad(res, 409, 'A family with that number is already on file.');
+    await write(famPath(id), { id, parent, phone, adults: [], kids: [], createdAt: new Date().toISOString(), madeBy: staff.name });
+    return res.json({ ...(await staffView(staff, people)), newFamily: id });
+  } else if (action === 'famDelete') {
+    const fam = /^[0-9a-f]{12}$/.test(body.fid || '') ? await read(famPath(body.fid)) : null;
+    if (!fam?.id) return bad(res, 404, 'Family not found.');
+    await updateJson('kids/index.json', (ix) => { delete ix[fam.phone]; });
+    // Emptied, not removed: an empty file is skipped everywhere, and past attendance keeps the child's name.
+    await Promise.all([write(famPath(fam.id), {}), write(chatPath(fam.id), {})]);
+  } else if (action === 'scheckin') {
     const fam = /^[0-9a-f]{12}$/.test(body.fid || '') ? await read(famPath(body.fid)) : null;
     const ids = (Array.isArray(body.kidIds) ? body.kidIds : []).filter((k) => fam?.kids.some((x) => x.id === k));
     if (!fam || !ids.length) return bad(res, 400, 'Pick a family and at least one child.');
@@ -281,6 +330,22 @@ export default route(async (req, res, body) => {
     })).filter((r) => r.name && r.max >= r.min);
     if (!rooms.length) return bad(res, 400, 'Keep at least one room.');
     await updateJson('kids/settings.json', (s) => { s.rooms = rooms; });
+  } else if (action === 'setLabel') {
+    const l = body.label || {};
+    const label = { header: text(l.header, 40), footer: text(l.footer, 60) };
+    for (const k of ['age', 'room', 'allergy', 'medical', 'parent', 'date', 'big']) label[k] = !!l[k];
+    await updateJson('kids/settings.json', (st) => { st.label = label; });
+  } else if (action === 'addStaff') {
+    // A brand-new volunteer who only serves in Kids Ministry.
+    const name = text(body.name, 60);
+    if (!name) return bad(res, 400, 'Enter a name.');
+    if (!STAFF_ROLES.includes(body.role)) return bad(res, 400, 'Pick a role.');
+    if (people.some((p) => p.name.toLowerCase() === name.toLowerCase())) return bad(res, 409, 'That name is already on the volunteer list. Pick them from the list instead.');
+    let number;
+    do number = String(randomInt(100000, 1000000)); while (people.some((p) => p.number === number));
+    const person = { id: 'p' + (Math.max(...people.map((p) => Number(p.id.slice(1)))) + 1), name, number, roles: {}, kids: { role: body.role } };
+    people.push(person);
+    await updateJson('people.json', (list) => { if (!list.some((p) => p.id === person.id)) list.push(person); });
   } else if (action === 'setStaff') {
     const person = people.find((p) => p.id === body.personId);
     if (!person) return bad(res, 404, 'Volunteer not found.');

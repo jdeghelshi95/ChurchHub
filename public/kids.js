@@ -4,6 +4,34 @@ const ROLE_LABEL = { lead: 'Kids Ministry lead', teacher: 'Teacher', assistant: 
 const timeOf = (iso) => new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 const roomName = (rooms, id) => rooms.find((r) => r.id === id)?.name || 'Room';
 const kval = (id) => document.getElementById(id)?.value ?? '';
+const fmtPhone = (p) => p ? `(${p.slice(0, 3)}) ${p.slice(3, 6)}-${p.slice(6)}` : '';
+
+// The row of ministries at the top of every leader page. Band and Diaconado are being built out.
+const MINISTRIES = [['leader', 'Production'], ['kids', 'Kids'], ['band', 'Band'], ['diaconado', 'Diaconado']];
+function ministryBar(active) {
+  return `<nav class="groups" aria-label="Ministries">${MINISTRIES.map(([h, l]) => `<button data-min="${h}" aria-pressed="${h === active}">${l}</button>`).join('')}</nav>`;
+}
+function bindMinistryBar() {
+  app.querySelectorAll('[data-min]').forEach((b) => b.onclick = () => { location.hash = b.dataset.min === 'leader' && !(L.code || V.data?.access) ? '' : b.dataset.min; });
+}
+function diaconadoStart() {
+  app.innerHTML = `<div class="top"><div><p class="muted">Ministries</p><h1>Diaconado</h1></div></div>${ministryBar('diaconado')}
+  <section class="panel"><h2>Coming soon</h2><p class="muted">This ministry has a place saved. Scheduling and tools for Diaconado will be added here.</p></section>`;
+  bindMinistryBar();
+}
+
+// The other adults in a family, with a form to add one. Used on the parent page and on the staff family profile.
+function adultsPanel(f) {
+  return `<section class="panel"><h2>Other adults</h2><p class="small muted">Adults in this family who may also drop off and pick up.</p>
+  ${(f.adults || []).map((a) => `<div class="row"><span class="grow"><b>${esc(a.name)}</b><br><span class="small muted">${esc([a.relation, fmtPhone(a.phone)].filter(Boolean).join(' · ') || 'Adult')}</span></span><button class="link small" data-deladult="${a.id}">Remove</button></div>`).join('') || '<p class="muted">No other adults yet.</p>'}
+  <form id="adultform" style="display:grid;gap:8px"><input id="aname" placeholder="Adult’s name" maxlength="60" aria-label="Adult’s name" required>
+  <div class="row"><input id="arel" class="grow" placeholder="Relation, like Grandma" maxlength="40" aria-label="Relation"><input id="aphone" class="grow" type="tel" placeholder="Phone (optional)" maxlength="20" aria-label="Phone"></div><button>Add adult</button></form></section>`;
+}
+function bindAdults(call) {
+  const f = document.getElementById('adultform');
+  if (f) f.onsubmit = (e) => { e.preventDefault(); call({ action: 'addAdult', name: kval('aname'), relation: kval('arel'), phone: kval('aphone') }, 'Adult added.'); };
+  app.querySelectorAll('[data-deladult]').forEach((b) => b.onclick = () => { if (b.dataset.sure) return call({ action: 'removeAdult', adultId: b.dataset.deladult }, 'Removed.'); b.dataset.sure = '1'; b.textContent = 'Tap again to remove'; });
+}
 
 // A QR code as an SVG picture, or nothing if the QR library didn't load. The code is always printed as digits too.
 function qrSvg(textValue, cell = 5) {
@@ -30,22 +58,23 @@ function parentStart() {
   if (P.token) parentCall({ action: 'pload' }); else parentLogin();
 }
 function parentLogin(msg) {
-  const reg = P.mode === 'register';
+  const reg = P.mode === 'register', claim = P.mode === 'claim';
   app.innerHTML = `<div class="land">${LOGO}<p class="muted">Kids Ministry check-in for parents.</p></div>
-  <form class="panel" id="f"><h2>${reg ? 'Register your family' : 'Parent sign-in'}</h2>
+  <form class="panel" id="f"><h2>${reg ? 'Register your family' : claim ? 'Choose your PIN' : 'Parent sign-in'}</h2>
   ${reg ? '<label class="lbl" for="pname">Your name</label><input id="pname" class="field" maxlength="60" autocomplete="name" required>' : ''}
-  <label class="lbl" for="pphone">Mobile number</label><input id="pphone" class="field" type="tel" inputmode="tel" autocomplete="tel" maxlength="20" required>
-  <label class="lbl" for="ppin">${reg ? 'Choose a PIN (4 to 6 digits)' : 'PIN'}</label><input id="ppin" class="field" type="password" inputmode="numeric" maxlength="6" autocomplete="${reg ? 'new-password' : 'current-password'}" required>
-  ${msg ? `<p class="err">${esc(msg)}</p>` : ''}<button class="primary">${reg ? 'Register' : 'Sign in'}</button></form>
-  <button class="link small" id="swap" style="justify-self:center">${reg ? 'I already registered. Sign in.' : 'New here? Register your family.'}</button>
+  <label class="lbl" for="pphone">Mobile number</label><input id="pphone" class="field" type="tel" inputmode="tel" autocomplete="tel" maxlength="20" required value="${esc(P.phone || '')}">
+  <label class="lbl" for="ppin">${reg || claim ? 'Choose a PIN (4 to 6 digits)' : 'PIN'}</label><input id="ppin" class="field" type="password" inputmode="numeric" maxlength="6" autocomplete="${reg || claim ? 'new-password' : 'current-password'}" ${claim ? '' : 'required'}>
+  ${msg ? `<p class="err">${esc(msg)}</p>` : ''}<button class="primary">${reg ? 'Register' : claim ? 'Save PIN and sign in' : 'Sign in'}</button></form>
+  <button class="link small" id="swap" style="justify-self:center">${reg || claim ? 'Back to sign in' : 'New here? Register your family.'}</button>
   <button class="link small" id="home" style="justify-self:center">Volunteer sign-in</button>`;
-  document.getElementById('swap').onclick = () => { P.mode = reg ? 'login' : 'register'; parentLogin(); };
+  document.getElementById('swap').onclick = () => { P.mode = reg || claim ? 'login' : 'register'; parentLogin(); };
   document.getElementById('home').onclick = () => { location.hash = ''; };
   document.getElementById('f').onsubmit = async (e) => {
     e.preventDefault();
-    const body = reg ? { action: 'register', parent: kval('pname'), phone: kval('pphone'), pin: kval('ppin') } : { action: 'plogin', phone: kval('pphone'), pin: kval('ppin') };
-    try { const r = await api('/api/kids', body); P.token = r.token; store.set('parentToken', r.token); P.data = r; P.tab = r.family.kids.length ? 'checkin' : 'kids'; parentView(); }
-    catch (er) { parentLogin(er.message); }
+    P.phone = kval('pphone');
+    const body = reg ? { action: 'register', parent: kval('pname'), phone: P.phone, pin: kval('ppin') } : { action: 'plogin', phone: P.phone, pin: kval('ppin'), claim };
+    try { const r = await api('/api/kids', body); P.token = r.token; store.set('parentToken', r.token); P.data = r; P.mode = 'login'; P.tab = r.family.kids.length ? 'checkin' : 'kids'; parentView(); }
+    catch (er) { if (er.status === 409 && !reg) P.mode = 'claim'; parentLogin(er.message); }
   };
 }
 async function parentCall(body, done) {
@@ -82,8 +111,7 @@ function parentView() {
     ${family.kids.map((k) => `<div class="cue"><div class="top"><div><div class="role">${esc(k.name)}</div><div class="muted small">${roomName(rooms, kidRooms[k.id])} · ${history[k.id] || 0} visit${history[k.id] === 1 ? '' : 's'}</div></div><button data-editkid="${k.id}">Edit</button></div>
     <div class="chips">${k.allergies ? `<span class="pill no">Allergy: ${esc(k.allergies)}</span>` : ''}${k.diapers !== 'no' ? `<span class="pill wait">${DIAPER_LABEL[k.diapers]}</span>` : ''}${k.bottle ? '<span class="pill wait">Bottle</span>' : ''}</div></div>`).join('') || '<p class="muted">Add your children so you can check them in.</p>'}</section>
     <form class="panel" id="famform"><h2>Family details</h2><label class="lbl" for="fparent">Your name</label><input id="fparent" class="field" maxlength="60" value="${esc(family.parent)}" required>
-    <label class="lbl" for="fpickup">Other adults who may pick up</label><input id="fpickup" class="field" maxlength="200" value="${esc(family.pickup)}" placeholder="Names, separated by commas">
-    <button class="primary">Save family details</button></form>`;
+    <button class="primary">Save</button></form>${adultsPanel(family)}`;
   } else if (P.tab === 'chat') {
     body = `<section class="panel"><h2>Messages with the teachers</h2><p class="small muted">Ask how your child is doing, or reply to a teacher. Teachers see this during service.</p>${chatBox(chat, 'parent', 'psend')}</section>`;
   } else {
@@ -112,13 +140,14 @@ function parentView() {
     const was = P.edit; P.edit = null;
     if (!(await parentCall({ action: 'saveKid', kid }, 'Saved.'))) { P.edit = was; }
   });
-  on('famform', (e) => { e.preventDefault(); parentCall({ action: 'saveFamily', parent: kval('fparent'), pickup: kval('fpickup') }, 'Saved.'); });
+  on('famform', (e) => { e.preventDefault(); parentCall({ action: 'saveFamily', parent: kval('fparent') }, 'Saved.'); });
+  bindAdults(parentCall);
   on('docheckin', () => { const kidIds = [...app.querySelectorAll('[data-ck]:checked')].map((c) => c.dataset.ck); if (!kidIds.length) return toast('Pick at least one child.'); parentCall({ action: 'checkin', kidIds }, 'Checked in. Show your pass at the desk.'); });
   on('psend', async (e) => { e.preventDefault(); const t = kval('chattext'); if (!t.trim()) return; await parentCall({ action: 'psend', text: t }); scrollChat(); });
 }
 
 /* ---------- Kids Team staff ---------- */
-const K = { data: null, tab: 'today', q: '', fam: null, thread: null, code: '', print: null };
+const K = { data: null, tab: 'today', q: '', fam: null, thread: null, code: '', print: null, prof: null, kidEdit: null, fq: '' };
 const isLead = () => ['admin', 'lead'].includes(K.data.me.level);
 const canTeach = () => isLead() || K.data.me.level === 'teacher';
 
@@ -149,14 +178,21 @@ function todayTab() {
     <div class="row"><button data-remind="${e.fid}">Remind parent</button><button data-msg="${e.fid}">Message parent</button><select data-move="${e.kidId}" aria-label="Room for ${esc(e.name)}">${rooms.map((x) => `<option value="${x.id}"${x.id === e.roomId ? ' selected' : ''}>${esc(x.name)}</option>`).join('')}</select></div></div>`).join('') || '<p class="muted">Nobody checked in yet.</p>'}
     ${list.length ? `<button data-remindroom="${r.id}">Remind all ${esc(r.name)} parents to pick up</button>` : ''}</section>`; }).join('')}`;
 }
+// One printed label. What it shows comes from the label settings on the Rooms and labels page.
+function childLabel(o, d) {
+  return `<div class="label${o.big ? ' big' : ''}">${o.header ? `<div class="lhead">${esc(o.header)}</div>` : ''}<div class="ltext"><div class="lname">${esc(d.name.split(' ')[0].toUpperCase())}</div>
+  <div>${esc(d.name)}${o.age && d.age != null ? ' · Age ' + d.age : ''}</div>${o.room ? `<div><b>${esc(d.room)}</b></div>` : ''}
+  ${o.allergy && d.allergies ? `<div class="lwarn">ALLERGY: ${esc(d.allergies.toUpperCase())}</div>` : ''}${o.medical && d.medical ? `<div class="lwarn">MEDICAL: ${esc(d.medical.toUpperCase())}</div>` : ''}
+  ${o.parent ? `<div class="lsmall">Parent: ${esc(d.parent)}</div>` : ''}${o.date ? `<div class="lsmall">${esc(d.day)}</div>` : ''}${o.footer ? `<div class="lsmall">${esc(o.footer)}</div>` : ''}</div>
+  <div class="lcode">${d.qr}<b>${esc(d.code)}</b></div></div>`;
+}
 function labelSheet(f) {
-  const { date, rooms, entries } = K.data;
+  const { date, rooms, entries, label } = K.data;
   const mine = entries.filter((e) => e.fid === f.id && !e.outAt);
   const qr = qrSvg(passText(date, f.code), 4);
   const day = dayName(date);
-  return `${mine.map((e) => `<div class="label"><div class="ltext"><div class="lname">${esc(e.name.split(' ')[0].toUpperCase())}</div><div>${esc(e.name)}${e.info ? ' · Age ' + e.info.age : ''}</div><div><b>${esc(roomName(rooms, e.roomId))}</b></div>
-  ${e.info?.allergies ? `<div class="lwarn">ALLERGY: ${esc(e.info.allergies.toUpperCase())}</div>` : ''}<div class="lsmall">${day}</div></div><div class="lcode">${qr}<b>${esc(f.code)}</b></div></div>`).join('')}
-  <div class="label"><div class="ltext"><div class="lname" style="font-size:20px">PICKUP PASS</div><div><b>${esc(f.parent)}</b></div>${mine.map((e) => `<div>${esc(e.name)} · ${esc(roomName(rooms, e.roomId))}</div>`).join('')}<div class="lsmall">${day} · Show this to pick up</div></div><div class="lcode">${qr}<b>${esc(f.code)}</b></div></div>`;
+  return `${mine.map((e) => childLabel(label, { name: e.name, age: e.info?.age, room: roomName(rooms, e.roomId), allergies: e.info?.allergies, medical: e.info?.medical, parent: f.parent, day, code: f.code, qr })).join('')}
+  <div class="label${label.big ? ' big' : ''}">${label.header ? `<div class="lhead">${esc(label.header)}</div>` : ''}<div class="ltext"><div class="lname" style="font-size:16pt">PICKUP PASS</div><div><b>${esc(f.parent)}</b></div>${mine.map((e) => `<div>${esc(e.name)} · ${esc(roomName(rooms, e.roomId))}</div>`).join('')}<div class="lsmall">${day} · Show this to pick up</div></div><div class="lcode">${qr}<b>${esc(f.code)}</b></div></div>`;
 }
 function deskTab() {
   const { families, rooms, entries } = K.data;
@@ -196,26 +232,64 @@ function attendanceTab() {
   return `<section class="panel"><h2>By service</h2>${attendance.perDate.map((d) => `<div class="row"><span class="grow">${dayName(d.date)}</span><b>${d.count}</b></div>`).join('') || '<p class="muted">No check-ins yet.</p>'}</section>
   <section class="panel"><h2>By child</h2><div class="scroll"><table class="st"><thead><tr><th></th><th>Child</th><th>Visits</th><th>Last here</th><th>Parent</th></tr></thead><tbody>${kids.map((k, i) => `<tr><td class="rank">${i + 1}</td><td>${esc(k.name)}</td><td class="hot vP">${k.n}</td><td>${short(k.last)}</td><td>${esc(k.parent)}</td></tr>`).join('')}</tbody></table></div>${kids.length ? '' : '<p class="muted">No children registered yet.</p>'}</section>`;
 }
-function setupTab() {
-  const { rooms, staff } = K.data;
+function familiesTab() {
+  const { families, rooms } = K.data;
+  const f = families.find((x) => x.id === K.prof);
+  if (f && K.kidEdit) return kidForm(K.kidEdit === 'new' ? {} : f.kids.find((k) => k.id === K.kidEdit));
+  if (f) return `<section class="panel"><div class="top"><h2>Family profile</h2><button id="fback">All families</button></div>
+  <form id="fprof" style="display:grid;gap:8px"><label class="lbl" for="fparent">Main parent</label><div class="row"><input id="fparent" class="grow" maxlength="60" value="${esc(f.parent)}" required><button>Save name</button></div></form>
+  <div class="row small"><span class="grow muted">Mobile: ${esc(fmtPhone(f.phone))}</span><span class="pill ${f.hasPin ? 'yes' : 'wait'}">${f.hasPin ? 'Parent has signed in' : 'Parent hasn’t set a PIN yet'}</span></div></section>
+  <section class="panel"><div class="top"><h2>Children</h2><button class="primary" id="faddkid">Add a child</button></div>
+  ${f.kids.map((k) => `<div class="cue"><div class="top"><div><div class="role">${esc(k.name)}</div><div class="small muted">Age ${k.age} · ${esc(roomName(rooms, k.roomId))}</div></div><button data-fkid="${k.id}">Edit</button></div><div class="chips">${kidBadges(k)}</div></div>`).join('') || '<p class="muted">No children yet.</p>'}</section>
+  ${adultsPanel(f)}
+  ${isLead() ? '<button class="link small" id="fdel" style="justify-self:start">Delete this family</button>' : ''}`;
+  const q = K.fq.trim().toLowerCase();
+  const list = families.filter((x) => !q || x.parent.toLowerCase().includes(q) || x.phone.includes(q.replace(/\D/g, '') || '\u0000') || x.kids.some((k) => k.name.toLowerCase().includes(q)) || x.adults.some((a) => a.name.toLowerCase().includes(q)));
+  return `<form class="panel" id="fnew"><h2>New family</h2><p class="small muted">Start a profile at the desk, then add the children and other adults. The parent can sign in later with this number and choose a PIN.</p>
+  <input id="nparent" placeholder="Parent’s name" maxlength="60" aria-label="Parent’s name" required><input id="nphone" type="tel" placeholder="Mobile number" maxlength="20" aria-label="Mobile number" required><button class="primary">Create family</button></form>
+  <section class="panel"><div class="top"><h2>Families</h2><span class="muted small">${families.length} on file</span></div><input id="fq" placeholder="Search parent, adult, child or phone" value="${esc(K.fq)}" aria-label="Search families">
+  ${list.map((x) => `<button class="day" data-prof="${x.id}"><span>${esc(x.parent)}<br><span class="small muted">${esc(x.kids.map((k) => k.name).join(', ') || 'No children yet')}</span></span><span class="small muted">${x.kids.length} kid${x.kids.length === 1 ? '' : 's'} · ${x.adults.length + 1} adult${x.adults.length ? 's' : ''}</span></button>`).join('') || '<p class="muted">No families found.</p>'}</section>`;
+}
+function staffTab() {
+  const { staff } = K.data;
+  const team = staff.filter((p) => p.kids);
+  const others = staff.filter((p) => !p.kids);
+  const roles = (sel) => ['lead', 'teacher', 'assistant', 'checkin'].map((r) => `<option value="${r}"${sel === r ? ' selected' : ''}>${ROLE_LABEL[r]}</option>`).join('');
+  return `<section class="panel"><div class="top"><h2>Kids Team</h2><span class="muted small">${team.length} volunteer${team.length === 1 ? '' : 's'}</span></div>
+  ${team.map((p) => `<div class="cue"><div class="top"><div><div class="role">${esc(p.name)}</div>${p.media ? '<div class="small muted">Also serves in Production</div>' : ''}</div><button class="link small" data-unstaff="${p.id}">Remove</button></div><select data-staff="${p.id}" aria-label="Kids role for ${esc(p.name)}">${roles(p.kids.role)}</select></div>`).join('') || '<p class="muted">Nobody is on the Kids Team yet.</p>'}</section>
+  <form class="panel" id="sadd"><h2>Add someone already in Church Hub</h2><p class="small muted">They keep their other ministries and see both on their own page.</p>
+  <select id="sperson" aria-label="Volunteer">${others.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select><select id="srole" aria-label="Role">${roles('teacher')}</select><button class="primary">Add to Kids Team</button></form>
+  <form class="panel" id="snew"><h2>Add a new volunteer</h2><p class="small muted">For someone who only serves in Kids Ministry. They get a member number to sign in with, listed under Production › Admin tools › People &amp; numbers.</p>
+  <input id="sname" placeholder="Full name" maxlength="60" aria-label="Full name" required><select id="snrole" aria-label="Role">${roles('teacher')}</select><button class="primary">Add volunteer</button></form>`;
+}
+function roomsTab() {
+  const { rooms, label, date } = K.data;
   const link = location.origin + '/#parent';
-  return `<section class="panel"><h2>Kids Team volunteers</h2><p class="small muted">Give someone a Kids Ministry role and they get a Kids Ministry button on their own page. They keep any Media roles they have.</p>
-  <div class="scroll"><table><thead><tr><th>Name</th><th>Kids role</th></tr></thead><tbody>${staff.map((p) => `<tr><td>${esc(p.name)}</td><td><select data-staff="${p.id}" aria-label="Kids role for ${esc(p.name)}"><option value="">Not on Kids Team</option>${['lead', 'teacher', 'assistant', 'checkin'].map((r) => `<option value="${r}"${p.kids?.role === r ? ' selected' : ''}>${ROLE_LABEL[r]}</option>`).join('')}</select></td></tr>`).join('')}</tbody></table></div></section>
-  <form class="panel" id="rooms"><h2>Rooms and ages</h2><p class="small muted">Children are placed by age. Clear a name to remove that room.</p>
-  ${[...rooms, { id: '', name: '', min: '', max: '' }].map((r, i) => `<div class="row" data-room-row="${esc(r.id)}"><input class="grow" data-rn value="${esc(r.name)}" placeholder="${i === rooms.length ? 'Add a room' : 'Room name'}" maxlength="40" aria-label="Room name"><input data-rmin type="number" min="0" max="17" value="${r.min}" style="width:72px" aria-label="Youngest age"><input data-rmax type="number" min="0" max="17" value="${r.max}" style="width:72px" aria-label="Oldest age"></div>`).join('')}
-  <button class="primary">Save rooms</button></form>
+  const box = (k, text) => `<label class="check"><input type="checkbox" data-lab="${k}"${label[k] ? ' checked' : ''}>${text}</label>`;
+  const sample = { name: 'Mateo Rivera', age: 5, room: rooms[0]?.name || 'Room', allergies: 'Peanuts', medical: 'Inhaler', parent: 'Ana Rivera', day: dayName(date), code: '4821', qr: qrSvg(passText(date, '4821'), 4) };
+  return `<section class="panel"><h2>Rooms and age groups</h2><p class="small muted">Children are placed in a room by age. Change a name or the ages and save, or delete a room you don’t use.</p>
+  ${rooms.map((r) => `<div class="row" data-room-row="${esc(r.id)}"><input class="grow" data-rn value="${esc(r.name)}" maxlength="40" aria-label="Room name"><span class="small muted">Ages</span><input data-rmin type="number" min="0" max="17" value="${r.min}" style="width:64px" aria-label="Youngest age"><span class="small muted">to</span><input data-rmax type="number" min="0" max="17" value="${r.max}" style="width:64px" aria-label="Oldest age"><button class="link small" data-delroom="${esc(r.id)}">Delete</button></div>`).join('')}
+  <button class="primary" id="saverooms">Save rooms</button>
+  <form class="row" id="addroom"><input id="newroom" class="grow" placeholder="New room name" maxlength="40" aria-label="New room name" required><input id="newmin" type="number" min="0" max="17" placeholder="From" style="width:72px" aria-label="Youngest age" required><input id="newmax" type="number" min="0" max="17" placeholder="To" style="width:72px" aria-label="Oldest age" required><button>Add room</button></form></section>
+  <form class="panel" id="labform"><h2>Label design</h2><p class="small muted">Choose what prints on each child’s label. The name, pickup code and QR code always print.</p>
+  <label class="lbl" for="labhead">Top line</label><input id="labhead" maxlength="40" value="${esc(label.header)}" placeholder="For example: your church or ministry name">
+  <div>${box('age', 'Age')}${box('room', 'Room')}${box('allergy', 'Allergies')}${box('medical', 'Medical needs')}${box('parent', 'Parent’s name')}${box('date', 'Date')}${box('big', 'Larger label and text')}</div>
+  <label class="lbl" for="labfoot">Bottom line</label><input id="labfoot" maxlength="60" value="${esc(label.footer)}" placeholder="For example: Return this label at pickup">
+  <div class="small muted">Preview</div><div class="lprev">${childLabel(label, sample)}</div>
+  <div class="row"><button class="primary">Save label design</button><button type="button" id="labtest">Print a test label</button></div></form>
   <section class="panel"><h2>Door poster</h2><p class="small muted">Print this for the door. Parents scan it with their phone camera to register and check in their kids.</p><div class="qr">${qrSvg(link, 6)}</div><p class="small" style="text-align:center;overflow-wrap:anywhere">${esc(link)}</p><button id="poster">Print poster</button></section>`;
 }
 function kidsView() {
   const { me, date, chats } = K.data;
   const unread = chats.filter((c) => c.unread).length;
-  const tabs = [['today', 'Rooms and pickup'], ['desk', 'Check-in desk'], ['chat', 'Messages' + (unread ? ` (${unread})` : '')], ['materials', 'Teaching material'], ['att', 'Attendance'], ...(isLead() ? [['setup', 'Setup']] : [])];
+  const tabs = [['today', 'Rooms and pickup'], ['desk', 'Check-in desk'], ['families', 'Families'], ['chat', 'Messages' + (unread ? ` (${unread})` : '')], ['materials', 'Teaching material'], ['att', 'Attendance'], ...(isLead() ? [['staff', 'Staff'], ['setup', 'Rooms and labels']] : [])];
   if (!tabs.some((t) => t[0] === K.tab)) K.tab = 'today';
-  const body = K.tab === 'desk' ? deskTab() : K.tab === 'chat' ? chatTab() : K.tab === 'materials' ? materialsTab() : K.tab === 'att' ? attendanceTab() : K.tab === 'setup' ? setupTab() : todayTab();
-  app.innerHTML = `<div class="top"><div><p class="muted">Kids Ministry · ${esc(ROLE_LABEL[me.level] || '')}</p><h1>${dayName(date)}</h1></div><div class="row"><button id="kleave">Back to schedule</button></div></div>
-  <div class="subs">${tabs.map(([t, l]) => `<button data-kt="${t}" aria-pressed="${K.tab === t}">${l}</button>`).join('')}</div>${body}<div id="printarea" aria-hidden="true"></div>`;
-  document.getElementById('kleave').onclick = () => { location.hash = L.code || V.data?.access ? 'leader' : ''; };
-  app.querySelectorAll('[data-kt]').forEach((b) => b.onclick = () => { K.tab = b.dataset.kt; kidsView(); scrollTo(0, 0); });
+  const body = K.tab === 'desk' ? deskTab() : K.tab === 'chat' ? chatTab() : K.tab === 'materials' ? materialsTab() : K.tab === 'att' ? attendanceTab() : K.tab === 'setup' ? roomsTab() : K.tab === 'families' ? familiesTab() : K.tab === 'staff' ? staffTab() : todayTab();
+  app.innerHTML = `<div class="top"><div><p class="muted">Kids Ministry · ${esc(ROLE_LABEL[me.level] || '')}</p><h1>${dayName(date)}</h1></div>${isLead() ? '' : '<div class="row"><button id="kleave">Back to my schedule</button></div>'}</div>
+  ${isLead() ? ministryBar('kids') : ''}<div class="subs">${tabs.map(([t, l]) => `<button data-kt="${t}" aria-pressed="${K.tab === t}">${l}</button>`).join('')}</div>${body}<div id="printarea" aria-hidden="true"></div>`;
+  const kl = document.getElementById('kleave'); if (kl) kl.onclick = () => { location.hash = ''; };
+  bindMinistryBar();
+  app.querySelectorAll('[data-kt]').forEach((b) => b.onclick = () => { K.tab = b.dataset.kt; K.kidEdit = null; kidsView(); scrollTo(0, 0); });
   const on = (id, fn) => { const el = document.getElementById(id); if (el) el[el.tagName === 'FORM' ? 'onsubmit' : 'onclick'] = fn; };
   const each = (sel, fn) => app.querySelectorAll(sel).forEach(fn);
   const printHtml = (html, cls) => { const p = document.getElementById('printarea'); p.className = cls; p.innerHTML = html; setTimeout(() => window.print(), 50); };
@@ -243,9 +317,42 @@ function kidsView() {
   // Teaching material
   on('mform', (e) => { e.preventDefault(); kidsCall({ action: 'addMaterial', roomId: kval('mroom'), title: kval('mtitle'), url: kval('murl'), note: kval('mnote') }, 'Material added.'); });
   each('[data-delm]', (b) => b.onclick = () => { if (b.dataset.sure) return kidsCall({ action: 'removeMaterial', roomId: b.dataset.room, id: b.dataset.delm }, 'Removed.'); b.dataset.sure = '1'; b.textContent = 'Tap again to remove'; });
-  // Setup
+  // Families
+  const fam = (b, msg) => kidsCall({ ...b, fid: K.prof }, msg);
+  const fq = document.getElementById('fq');
+  if (fq) fq.oninput = () => { K.fq = fq.value; kidsView(); const n = document.getElementById('fq'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); };
+  each('[data-prof]', (b) => b.onclick = () => { K.prof = b.dataset.prof; kidsView(); scrollTo(0, 0); });
+  on('fnew', async (e) => { e.preventDefault(); if (await kidsCall({ action: 'famCreate', parent: kval('nparent'), phone: kval('nphone') }, 'Family created. Add the children next.')) { K.prof = K.data.newFamily; kidsView(); scrollTo(0, 0); } });
+  on('fback', () => { K.prof = null; kidsView(); });
+  on('fprof', (e) => { e.preventDefault(); fam({ action: 'saveFamily', parent: kval('fparent') }, 'Saved.'); });
+  on('faddkid', () => { K.kidEdit = 'new'; kidsView(); scrollTo(0, 0); });
+  each('[data-fkid]', (b) => b.onclick = () => { K.kidEdit = b.dataset.fkid; kidsView(); scrollTo(0, 0); });
+  if (K.tab === 'families' && K.kidEdit) {
+    on('kcancel', () => { K.kidEdit = null; kidsView(); });
+    on('kdel', (e) => { const b = e.target; if (b.dataset.sure) { const id = K.kidEdit; K.kidEdit = null; return fam({ action: 'removeKid', kidId: id }, 'Removed.'); } b.dataset.sure = '1'; b.textContent = 'Tap again to remove'; });
+    on('kidform', async (e) => {
+      e.preventDefault();
+      const kid = { id: K.kidEdit === 'new' ? undefined : K.kidEdit, name: kval('kname'), birth: kval('kbirth'), allergies: kval('kallergy'), medical: kval('kmedical'), diapers: kval('kdiaper'), bottle: kval('kbottle'), food: kval('kfood'), notes: kval('knotes') };
+      const was = K.kidEdit; K.kidEdit = null;
+      if (!(await fam({ action: 'saveKid', kid }, 'Saved.'))) { K.kidEdit = was; kidsView(); }
+    });
+  }
+  if (K.tab === 'families') bindAdults(fam);
+  on('fdel', async (e) => { const b = e.target; if (!b.dataset.sure) { b.dataset.sure = '1'; b.textContent = 'Tap again to delete this family and its messages'; return; } const fid = K.prof; K.prof = null; await kidsCall({ action: 'famDelete', fid }, 'Family deleted.'); });
+  // Staff
   each('[data-staff]', (s) => s.onchange = () => kidsCall({ action: 'setStaff', personId: s.dataset.staff, role: s.value }, 'Saved.'));
-  on('rooms', (e) => { e.preventDefault(); const rooms = [...app.querySelectorAll('[data-room-row]')].map((r) => ({ id: r.dataset.roomRow, name: r.querySelector('[data-rn]').value, min: r.querySelector('[data-rmin]').value, max: r.querySelector('[data-rmax]').value })); kidsCall({ action: 'setRooms', rooms }, 'Rooms saved.'); });
+  each('[data-unstaff]', (b) => b.onclick = () => { if (b.dataset.sure) return kidsCall({ action: 'setStaff', personId: b.dataset.unstaff, role: '' }, 'Removed from the Kids Team.'); b.dataset.sure = '1'; b.textContent = 'Tap again to remove'; });
+  on('sadd', (e) => { e.preventDefault(); if (!kval('sperson')) return toast('Everyone is already on the Kids Team.'); kidsCall({ action: 'setStaff', personId: kval('sperson'), role: kval('srole') }, 'Added to the Kids Team.'); });
+  on('snew', (e) => { e.preventDefault(); kidsCall({ action: 'addStaff', name: kval('sname'), role: kval('snrole') }, 'Volunteer added.'); });
+  // Rooms and labels
+  const readRooms = () => [...app.querySelectorAll('[data-room-row]')].map((r) => ({ id: r.dataset.roomRow, name: r.querySelector('[data-rn]').value, min: r.querySelector('[data-rmin]').value, max: r.querySelector('[data-rmax]').value }));
+  on('saverooms', () => kidsCall({ action: 'setRooms', rooms: readRooms() }, 'Rooms saved.'));
+  on('addroom', (e) => { e.preventDefault(); kidsCall({ action: 'setRooms', rooms: [...readRooms(), { id: '', name: kval('newroom'), min: kval('newmin'), max: kval('newmax') }] }, 'Room added.'); });
+  each('[data-delroom]', (b) => b.onclick = () => { if (b.dataset.sure) return kidsCall({ action: 'setRooms', rooms: readRooms().filter((r) => r.id !== b.dataset.delroom) }, 'Room deleted.'); b.dataset.sure = '1'; b.textContent = 'Tap again to delete'; });
+  const readLabel = () => { const l = { header: kval('labhead'), footer: kval('labfoot') }; app.querySelectorAll('[data-lab]').forEach((c) => { l[c.dataset.lab] = c.checked; }); return l; };
+  each('[data-lab]', (c) => c.onchange = () => { K.data.label = { ...K.data.label, ...readLabel() }; kidsView(); });
+  on('labform', (e) => { e.preventDefault(); kidsCall({ action: 'setLabel', label: readLabel() }, 'Label design saved.'); });
+  on('labtest', () => { const p = app.querySelector('.lprev'); printHtml(p.innerHTML, 'labels'); });
   on('poster', () => printHtml(`<div class="poster"><h1>Kids Ministry check-in</h1><p>Scan with your phone camera to register and check in your kids.</p>${qrSvg(location.origin + '/#parent', 10)}<p>${esc(location.origin)}/#parent</p></div>`, 'posterpage'));
 }
 // Reads a pickup pass with the camera where the browser supports it. Typing the code always works.
