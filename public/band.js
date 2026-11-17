@@ -74,8 +74,10 @@ function bandView() {
   const top = me.level === 'admin';
   app.innerHTML = `<div class="top"><div><p class="muted">Band${editor ? ' · Leader' : ''}</p><h1>${esc(me.name === 'Leader' ? APP_NAME : me.name)}</h1></div>${top ? '' : '<div class="row"><button id="bleave">Back to my schedule</button></div>'}</div>
   ${top ? ministryBar('band') : ''}<div class="subs">${tabs.map(([t, l]) => `<button data-bt="${t}" aria-pressed="${B.tab === t}">${l}</button>`).join('')}</div>
-  ${B.tab === 'songs' ? songsTab() : B.tab === 'members' ? membersTab() : setsTab()}`;
+  ${B.tab === 'songs' ? songsTab() : B.tab === 'members' ? membersTab() : setsTab()}${barActions('brefresh')}`;
   bindMinistryBar();
+  app.querySelector('#brefresh').onclick = () => bandCall({ action: 'load' }, 'Up to date.');
+  app.querySelector('#allout').onclick = signOutAll;
   const on = (id, fn) => { const el = document.getElementById(id); if (el) el[el.tagName === 'FORM' ? 'onsubmit' : 'onclick'] = fn; };
   const each = (sel, fn) => app.querySelectorAll(sel).forEach(fn);
   const sure = (b, label, go) => { if (b.dataset.sure) return go(); b.dataset.sure = '1'; b.textContent = label; };

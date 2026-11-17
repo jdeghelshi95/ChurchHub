@@ -32,9 +32,17 @@ function bindMinistryBar() {
 }
 addEventListener('click', (e) => { if (!e.target.closest?.('.mswitch')) closeMinistryMenu(); });
 addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeMinistryMenu(); document.getElementById('mbtn')?.focus(); } });
+// Signs out of everything on this device, from any ministry page.
+function signOutAll() {
+  store.del('leaderCode', sessionStorage); store.del('memberToken');
+  L.code = null; L.data = null; V.token = null; V.data = null; K.data = null; if (typeof B !== 'undefined') B.data = null;
+  if (location.hash) location.hash = ''; else start();
+}
+const barActions = (refreshId) => `<span hidden>${barBtn(refreshId, 'Refresh', ICON_REFRESH)}${barBtn('allout', 'Sign out', ICON_OUT)}</span>`;
 function diaconadoStart() {
   app.innerHTML = `<div class="top"><div><p class="muted">Ministries</p><h1>Diaconado</h1></div></div>${ministryBar('diaconado')}
-  <section class="panel"><h2>Coming soon</h2><p class="muted">This ministry has a place saved. Scheduling and tools for Diaconado will be added here.</p></section>`;
+  <section class="panel"><h2>Coming soon</h2><p class="muted">This ministry has a place saved. Scheduling and tools for Diaconado will be added here.</p></section><span hidden>${barBtn('allout', 'Sign out', ICON_OUT)}</span>`;
+  app.querySelector('#allout').onclick = signOutAll;
   bindMinistryBar();
 }
 
@@ -142,9 +150,9 @@ function parentView() {
     ${entries.filter((e) => e.outAt).map((e) => `<div class="row small muted"><span class="grow">${esc(e.name)}</span><span>Picked up at ${timeOf(e.outAt)}</span></div>`).join('')}</section>`;
   }
   app.innerHTML = `${reminder && inNow.length ? `<div class="alert pick" role="alert"><span>Service has ended. Please come pick up ${esc(inNow.map((e) => e.name).join(' and '))}.</span></div>` : ''}
-  <div class="top"><div><p class="muted">Kids Ministry</p><h1>${esc(family.parent)}</h1></div><button class="link" id="pout">Sign out</button></div>
+  <div class="top"><div><p class="muted">Kids Ministry</p><h1>${esc(family.parent)}</h1></div>${barBtn('pout', 'Sign out', ICON_OUT)}</div>
   <div class="tabs">${tabs.map(([t, l]) => `<button data-pt="${t}" aria-pressed="${P.tab === t}">${l}</button>`).join('')}</div>${body}`;
-  document.getElementById('pout').onclick = () => { store.del('parentToken'); P.token = null; P.data = null; parentLogin(); };
+  app.querySelector('#pout').onclick = () => { store.del('parentToken'); P.token = null; P.data = null; parentLogin(); };
   app.querySelectorAll('[data-pt]').forEach((b) => b.onclick = () => { P.tab = b.dataset.pt; P.edit = null; parentView(); if (P.tab === 'chat') { scrollChat(); if (unread) { P.data.unread = false; api('/api/kids', { action: 'pseen' }, pHdr()).catch(() => {}); } } });
   if (P.tab === 'chat') scrollChat();
   const on = (id, fn) => { const el = document.getElementById(id); if (el) el[el.tagName === 'FORM' ? 'onsubmit' : 'onclick'] = fn; };
@@ -341,7 +349,9 @@ function kidsView() {
   const body = K.tab === 'desk' ? deskTab() : K.tab === 'chat' ? chatTab() : K.tab === 'materials' ? materialsTab() : K.tab === 'att' ? attendanceTab() : K.tab === 'setup' ? roomsTab() : K.tab === 'families' ? familiesTab() : K.tab === 'staff' ? staffTab() : K.tab === 'sched' ? schedTab(false) : K.tab === 'plan' ? schedTab(true) : todayTab();
   app.innerHTML = `<div class="top"><div><p class="muted">Kids Ministry · ${esc(ROLE_LABEL[me.level] || '')}</p><h1>${dayName(date)}</h1></div>${isLead() ? '' : '<div class="row"><button id="kleave">Back to my schedule</button></div>'}</div>
   ${isLead() ? ministryBar('kids') : ''}<nav class="groups cats" aria-label="Kids Ministry sections">${groups.map(([name, list]) => `<button data-kt="${list[0][0]}" aria-pressed="${name === group[0]}">${name}${name === 'Parents' && unread ? ' \u2022' : ''}</button>`).join('')}</nav>
-  <div class="subs">${tabs.map(([t, l]) => `<button data-kt="${t}" aria-pressed="${K.tab === t}">${l}</button>`).join('')}</div>${body}<div id="printarea" aria-hidden="true"></div>`;
+  <div class="subs">${tabs.map(([t, l]) => `<button data-kt="${t}" aria-pressed="${K.tab === t}">${l}</button>`).join('')}</div>${body}<div id="printarea" aria-hidden="true"></div>${barActions('krefresh')}`;
+  app.querySelector('#krefresh').onclick = () => kidsCall({ action: 'sload' }, 'Up to date.');
+  app.querySelector('#allout').onclick = signOutAll;
   const kl = document.getElementById('kleave'); if (kl) kl.onclick = () => { location.hash = ''; };
   bindMinistryBar();
   app.querySelectorAll('[data-kt]').forEach((b) => b.onclick = () => { K.tab = b.dataset.kt; K.kidEdit = null; kidsView(); scrollTo(0, 0); });

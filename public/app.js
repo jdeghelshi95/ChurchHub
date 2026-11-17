@@ -40,6 +40,12 @@ function setupThemes(){const box=document.getElementById('themes'),btn=document.
 // Moving to another page or tab fades the new content in. Saving something on the same page doesn't.
 function enter(){app.dataset.enter='1';clearTimeout(enter.t);enter.t=setTimeout(()=>{delete app.dataset.enter},600)}
 addEventListener('click',e=>{if(e.target.closest?.('[data-t],[data-kt],[data-bt],[data-pt],[data-v],[data-min],#dash,#mine,#kidsbtn,#bandbtn,#lead,#parents,#kleave,#bleave'))enter()},true);
+const ICON_REFRESH='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.3-4M4 4v4h4M4 13a8 8 0 0 0 14.3 4M20 20v-4h-4"/></svg>';
+const ICON_OUT='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4M15 8l4 4-4 4M19 12H9"/></svg>';
+const barBtn=(id,label,icon)=>`<button id="${id}" class="baract" aria-label="${label}" title="${label}">${icon}</button>`;
+// Refresh and Sign out live in the top bar. Each page still creates them, and they are moved up there once it has drawn.
+function dockBarButtons(){const dock=document.getElementById('baract');if(!dock)return;dock.replaceChildren(...app.querySelectorAll('.baract'))}
+new MutationObserver(dockBarButtons).observe(app,{childList:true});
 function toast(t){const e=document.getElementById('toast');e.textContent=t;e.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>e.hidden=true,3000)}
 async function api(path,body,headers={}){
   let r;try{r=await fetch(path,{method:'POST',headers:{'content-type':'application/json',...headers},body:JSON.stringify(body)})}
@@ -105,7 +111,7 @@ function memberView(){
   const {me,months,answers}=V.data;const mo=months.find(x=>x.month===V.month);
   const mine=[];for(const m of months)for(const s of m.services)for(const [r,v] of Object.entries(s.slots))if(v.me)mine.push({date:s.date,role:r});
   const upcoming=mine.filter(x=>x.date>=today).sort((a,b)=>a.date.localeCompare(b.date));const replied=upcoming.filter(x=>answers[key(x.date,x.role)]||V.data.off[x.date]).length;
-  app.innerHTML=`${V.data.username?'':`<div class="alert" role="alert"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2.5 20h19zM12 10v4.5M12 17.5v.01"/></svg><span>You don\u2019t have a username yet. Create one to sign in more easily.</span><button id="goname">Create username</button></div>`}<div class="top"><div><p class="muted">${APP_NAME}</p><h1>${esc(me.name)}</h1></div><div class="row">${V.data.kids?'<button id="kidsbtn">Kids Ministry</button>':''}${V.data.band?'<button id="bandbtn">Band</button>':''}${V.data.access?'<button class="primary" id="dash">Team dashboard</button>':''}<button class="link" id="out">Sign out</button></div></div>
+  app.innerHTML=`${V.data.username?'':`<div class="alert" role="alert"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2.5 20h19zM12 10v4.5M12 17.5v.01"/></svg><span>You don\u2019t have a username yet. Create one to sign in more easily.</span><button id="goname">Create username</button></div>`}<div class="top"><div><p class="muted">${APP_NAME}</p><h1>${esc(me.name)}</h1></div><div class="row">${V.data.kids?'<button id="kidsbtn">Kids Ministry</button>':''}${V.data.band?'<button id="bandbtn">Band</button>':''}${V.data.access?'<button class="primary" id="dash">Team dashboard</button>':''}${barBtn('out','Sign out',ICON_OUT)}</div></div>
   <div class="tabs"><button data-v="schedule" aria-pressed="${V.view!=='guides'}">My schedule</button><button data-v="guides" aria-pressed="${V.view==='guides'}">Guides</button></div>
   ${V.view==='guides'?myGuides():`${V.data.shirt?'':shirtBox()}
   ${V.data.other?.length?`<section class="panel"><h2>My other ministries</h2><p class="small muted">Dates you serve outside Production. You won\u2019t be scheduled in two places on the same day.</p>${V.data.other.map(x=>`<div class="row"><span class="grow"><b>${dayName(x.date)}</b></span><span class="pill yes">${esc(x.what)}</span></div>`).join('')}</section>`:''}
@@ -114,7 +120,7 @@ function memberView(){
   ${upcoming.length?upcoming.map(cue).join(''):`<p class="muted">You have no upcoming dates.</p>`}</section>
   <section class="panel"><h2>Full lineup</h2>${months.length>1?`<div class="tabs">${months.map(x=>`<button data-m="${x.month}" aria-pressed="${x.month===V.month}">${monthName(x.month)}</button>`).join('')}</div>`:''}${legend()}<div>${mo.services.filter(s=>s.date>=today).map(s=>`<details class="date"><summary>${dayName(s.date)}${setupTag(s.date)}${Object.keys(s.slots).filter(r=>s.slots[r].me).map(r=>tag(r,true)).join('')}</summary>
   ${ROLES.filter(r=>s.slots[r]).map(r=>`<div class="slot line ${RC[GROUP[r]]}${s.slots[r].me?' mine':''}" style="grid-template-columns:118px 1fr">${tag(r,s.slots[r].me)}<span class="${s.slots[r].me?'me':''}">${esc(s.slots[r].name||'Open')}</span></div>`).join('')}</details>`).join('')||'<p class="muted">This month is finished.</p>'}</div></section>`}${offPanel()}${V.data.shirt?shirtBox():''}${nameBox()}`}`;
-  document.getElementById('out').onclick=()=>{store.del('memberToken');V.token=null;V.number=null;V.data=null;memberLogin()};
+  app.querySelector('#out').onclick=()=>{store.del('memberToken');V.token=null;V.number=null;V.data=null;memberLogin()};
   const su=document.getElementById('saveuser');if(su)su.onclick=saveUser;
   const gn=document.getElementById('goname');if(gn)gn.onclick=()=>{if(V.view==='guides'){V.view='schedule';memberView()}document.getElementById('namebox').scrollIntoView({behavior:'smooth',block:'center'});document.getElementById('uname').focus({preventScroll:true})};
   app.querySelectorAll('[data-shirt]').forEach(b=>b.onclick=()=>saveShirt(b));
@@ -265,7 +271,7 @@ function leaderView(){
   for(const s of mo.services)for(const r of ROLES){if(!(r in s.slots)||s.date<today)continue;const id=s.slots[r];const a=answerOf(id,s.date,r);
     if(!id)open++;else if(!a)wait++;else if(a.a==='yes')yes++;else no++;
     if(!id||a?.a==='no')issues.push({s,r,a,id});else if(wrongDay(id,s.date,r))issues.push({s,r,a,id,wrong:1})}
-  app.innerHTML=`<div class="top"><div><p class="muted">Team dashboard${can()?'':' \u00b7 Supervisor view'}</p><h1>${APP_NAME}</h1></div><div class="row">${V.token?'<button id="mine">My schedule</button>':''}${!can()&&L.data.kidsRole?'<button id="kidsbtn">Kids Ministry</button>':''}<button id="refresh">Refresh</button><button class="link" id="out">Sign out</button></div></div>
+  app.innerHTML=`<div class="top"><div><p class="muted">Team dashboard${can()?'':' \u00b7 Supervisor view'}</p><h1>${APP_NAME}</h1></div><div class="row">${V.token?'<button id="mine">My schedule</button>':''}${!can()&&L.data.kidsRole?'<button id="kidsbtn">Kids Ministry</button>':''}${barBtn('refresh','Refresh',ICON_REFRESH)}${barBtn('out','Sign out',ICON_OUT)}</div></div>
   ${can()?ministryBar('leader'):''}${navBar()}
   ${L.tab==='stats'?statsView():L.tab==='profile'?profileView():L.tab==='avail'?availView():L.tab==='remind'?remindView():L.tab==='shirts'?shirtsView():L.tab==='guides'?guidesView():L.tab==='people'?peopleView():L.tab==='roles'?rolesView():L.tab==='days'?offView():L.tab==='att'?attView():`
   <section class="panel"><div class="row"><select id="month" class="grow" aria-label="Month">${list.map(m=>`<option value="${m}"${m===L.month?' selected':''}>${monthName(m)}${months[m].live?' (live)':''}</option>`).join('')}</select>
@@ -280,10 +286,10 @@ function leaderView(){
   <section class="panel"><h2>Lineup</h2>${legend()}${can()?'<p class="small muted">Change a name and only that slot changes.</p>':''}<div>${mo.services.map(s=>{const unsure=ROLES.some(r=>r in s.slots&&(!s.slots[r]||answerOf(s.slots[r],s.date,r)?.a==='no'||wrongDay(s.slots[r],s.date,r)));const dm=s.date>=today?dayMarks(s.date):{cant:[],ok:[]};
   return `<details class="date"${s.date>=today&&s.date<=addDays(today,10)?' open':''}><summary>${dayName(s.date)}${setupTag(s.date)}<span class="row">${dm.ok.length?`<span class="pill yes">${CHK}${dm.ok.length} available</span>`:''}${dm.cant.length?`<span class="pill no">${XIC}${dm.cant.length} can’t</span>`:''}${unsure?'<span class="pill wait">Needs attention</span>':''}</span></summary>
   ${ROLES.filter(r=>r in s.slots).map(r=>`<div class="slot line ${RC[GROUP[r]]}${isMe(s.slots[r])?' mine':''}">${tag(r,isMe(s.slots[r]))}${slotCell(s,r)}${statusPill(answerOf(s.slots[r],s.date,r),!s.slots[r],wrongDay(s.slots[r],s.date,r))}</div>`).join('')}${s.date>=today?markStrip(s.date):''}</details>`}).join('')}</div></section>`}`;
-  document.getElementById('out').onclick=()=>{store.del('leaderCode',sessionStorage);store.del('memberToken');L.code=null;V.token=null;V.data=null;L.data=null;location.hash=''};
+  app.querySelector('#out').onclick=()=>{store.del('leaderCode',sessionStorage);store.del('memberToken');L.code=null;V.token=null;V.data=null;L.data=null;location.hash=''};
   const mi=document.getElementById('mine');if(mi)mi.onclick=()=>{location.hash=''};
   const kb=document.getElementById('kidsbtn');if(kb)kb.onclick=()=>{location.hash='kids'};
-  document.getElementById('refresh').onclick=()=>leaderCall({action:'load'},'Up to date.');bindMinistryBar();
+  app.querySelector('#refresh').onclick=()=>leaderCall({action:'load'},'Up to date.');bindMinistryBar();
   app.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{L.tab=b.dataset.t;leaderView()});
   if(L.tab==='stats')return bindStats();
   if(L.tab==='profile')return bindProfile();

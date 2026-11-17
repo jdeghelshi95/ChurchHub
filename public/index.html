@@ -176,11 +176,13 @@ input[type=month],input[type=date]{min-width:150px}.choices button{padding-inlin
 @media (prefers-color-scheme:dark){[data-theme=teal]{--accent:#5ac8d8}[data-theme=blue]{--accent:#6cb2ff}[data-theme=indigo]{--accent:#a5a4ff}[data-theme=purple]{--accent:#c9a5ff}[data-theme=pink]{--accent:#ff8fb3}[data-theme=red]{--accent:#ff8a80}[data-theme=orange]{--accent:#ffb072}[data-theme=green]{--accent:#6fd79c}[data-theme]{--on-accent:#0b0b0f}}
 :root{--glow:0 0 0 1px color-mix(in srgb,var(--accent) 55%,transparent),0 6px 22px color-mix(in srgb,var(--accent) 38%,transparent)}
 /* Top bar: brand in the middle, colour button on the right. */
-.bar{padding-inline:12px}.brand{display:flex;align-items:center;gap:8px}
-.bar>button{position:absolute;right:max(12px,env(safe-area-inset-right,0px));width:40px;height:40px;min-height:0;padding:0;display:grid;place-items:center;background:none;color:var(--muted)}
-.bar>button:hover,.bar>button[aria-expanded=true]{background:var(--fill);color:var(--accent);filter:none}.bar>button svg{width:22px;height:22px}
+.bar{justify-content:space-between;padding-left:max(16px,env(safe-area-inset-left,0px),calc((100vw - 720px)/2 + 16px));padding-right:max(8px,env(safe-area-inset-right,0px),calc((100vw - 720px)/2 + 8px))}
+.brand{display:flex;align-items:center;gap:8px}.barx,#baract{display:flex;align-items:center;gap:2px}
+.barx button{width:40px;height:40px;min-height:0;padding:0;display:grid;place-items:center;background:none;color:var(--muted)}
+.barx button:hover,.barx button[aria-expanded=true]{background:var(--fill);color:var(--accent);filter:none}.barx button svg{width:22px;height:22px}
+.top:has(>.row:empty){flex-wrap:nowrap}.top>.row:empty{display:none}
 .pop{position:absolute;z-index:15;background:var(--panel);border:1px solid var(--line);border-radius:18px;box-shadow:0 18px 50px rgb(0 0 0/.2);padding:12px;animation:pop .18s ease both;transform-origin:top right}
-#themes{top:54px;right:max(10px,env(safe-area-inset-right,0px));display:grid;gap:10px;font-weight:500}#themes[hidden]{display:none}
+#themes{top:54px;right:max(8px,env(safe-area-inset-right,0px),calc((100vw - 720px)/2 + 8px));display:grid;gap:10px;font-weight:500}#themes[hidden]{display:none}
 .swatches{display:grid;grid-template-columns:repeat(4,40px);gap:10px}
 .swatches button{width:40px;height:40px;min-height:0;padding:0;border-radius:50%;background:var(--accent);border:3px solid var(--panel);box-shadow:0 0 0 1px var(--line)}
 .swatches button:hover{transform:scale(1.1);filter:none}.swatches button[aria-pressed=true]{box-shadow:0 0 0 2px var(--accent),0 0 16px color-mix(in srgb,var(--accent) 60%,transparent)}
@@ -214,7 +216,7 @@ input[type=month],input[type=date]{min-width:150px}.choices button{padding-inlin
 </head>
 <body>
 <header class="bar"><span class="brand"><svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="var(--accent)"/><path d="M9 31 32 12l23 19" fill="none" stroke="var(--on-accent)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/><path d="M32 28v24M23 37h18" fill="none" stroke="var(--on-accent)" stroke-width="6.5" stroke-linecap="round"/></svg>Church Hub</span>
-<button id="themebtn" aria-label="Colour theme" aria-expanded="false" aria-controls="themes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.800" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18c1.400 0 2-1 2-2 0-1.500-1-2 0-3 .600-.600 1.500-.500 2.500-.500A4.500 4.500 0 0 0 21 11c0-4.400-4-8-9-8z"/><circle cx="7.800" cy="11.500" r="1"/><circle cx="10.500" cy="7.500" r="1"/><circle cx="15" cy="7.800" r="1"/></svg></button>
+<div class="barx"><span id="baract"></span><button id="themebtn" aria-label="Colour theme" aria-expanded="false" aria-controls="themes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.800" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18c1.400 0 2-1 2-2 0-1.500-1-2 0-3 .600-.600 1.500-.500 2.500-.500A4.500 4.500 0 0 0 21 11c0-4.400-4-8-9-8z"/><circle cx="7.800" cy="11.500" r="1"/><circle cx="10.500" cy="7.500" r="1"/><circle cx="15" cy="7.800" r="1"/></svg></button></div>
 <div id="themes" class="pop" hidden></div></header>
 <main id="app"><p class="muted">Loading the schedule&hellip;</p></main>
 <div id="toast" role="status" hidden></div>
