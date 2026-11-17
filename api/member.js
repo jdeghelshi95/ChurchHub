@@ -38,7 +38,7 @@ function schedule(me, people, months, answers, off, on, guides, shirt, other = [
     })),
   }));
   const days = [0, 1, 2, 3].map((i) => (Object.values(me.roles).some((r) => r[i] === '1') ? '1' : '0')).join('');
-  return { me: { name: me.name }, username: me.username || '', months: live, answers, off, on, days, canMon: servesMonday(me), access: me.access || null, other, kids: me.kids?.role || (me.access === 'admin' ? 'admin' : null), band: me.band?.role || (me.access === 'admin' ? 'admin' : null), myGroups: Object.keys(me.roles), guides: Object.fromEntries(Object.keys(me.roles).map((g) => [g, guides?.[g] || []])), ...shirt, closeAt: closeAt(mySlots(months, me.id).map((s) => s.date)) };
+  return { me: { name: me.name }, username: me.username || '', months: live, answers, off, on, days, canMon: servesMonday(me), access: me.access || null, theme: me.theme || '', other, kids: me.kids?.role || (me.access === 'admin' ? 'admin' : null), band: me.band?.role || (me.access === 'admin' ? 'admin' : null), myGroups: Object.keys(me.roles), guides: Object.fromEntries(Object.keys(me.roles).map((g) => [g, guides?.[g] || []])), ...shirt, closeAt: closeAt(mySlots(months, me.id).map((s) => s.date)) };
 }
 
 export default route(async (req, res, body) => {
@@ -108,6 +108,12 @@ export default route(async (req, res, body) => {
     });
     if (taken) return res.status(409).json({ error: 'That username is taken. Try another.' });
     return res.json({ username });
+  }
+
+  if (action === 'setTheme') {
+    if (!['teal', 'blue', 'indigo', 'purple', 'pink', 'red', 'orange', 'green'].includes(body.theme)) return res.status(400).json({ error: 'Pick one of the colours.' });
+    await updateJson('people.json', (list) => { const mine = list.find((p) => p.id === me.id); if (mine) mine.theme = body.theme; });
+    return res.json({ theme: body.theme });
   }
 
   if (action === 'setShirt') {
