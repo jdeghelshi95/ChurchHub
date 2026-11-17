@@ -180,18 +180,18 @@ input[type=month],input[type=date]{min-width:150px}.choices button{padding-inlin
 .brand{display:flex;align-items:center;gap:8px}.barx,#baract{display:flex;align-items:center;gap:2px}
 .barx button{width:40px;height:40px;min-height:0;padding:0;display:grid;place-items:center;background:none;color:var(--muted)}
 .barx button:hover,.barx button[aria-expanded=true]{background:var(--fill);color:var(--accent);filter:none}.barx button svg{width:22px;height:22px}
-.top:has(>.row:empty){flex-wrap:nowrap}.top>.row:empty{display:none}
+.top>.row:empty{display:none}
 .pop{position:absolute;z-index:15;background:var(--panel);border:1px solid var(--line);border-radius:18px;box-shadow:0 18px 50px rgb(0 0 0/.2);padding:12px;animation:pop .18s ease both;transform-origin:top right}
 #themes{top:54px;right:max(8px,env(safe-area-inset-right,0px),calc((100vw - 720px)/2 + 8px));display:grid;gap:10px;font-weight:500}#themes[hidden]{display:none}
 .swatches{display:grid;grid-template-columns:repeat(4,40px);gap:10px}
 .swatches button{width:40px;height:40px;min-height:0;padding:0;border-radius:50%;background:var(--accent);border:3px solid var(--panel);box-shadow:0 0 0 1px var(--line)}
 .swatches button:hover{transform:scale(1.1);filter:none}.swatches button[aria-pressed=true]{box-shadow:0 0 0 2px var(--accent),0 0 16px color-mix(in srgb,var(--accent) 60%,transparent)}
 /* Ministry switcher. */
-.mswitch{position:relative;justify-self:start}
-.mbtn{display:flex;align-items:center;gap:10px;background:var(--panel);font-size:17px;font-weight:600;letter-spacing:-.01em;padding:9px 14px 9px 12px;min-height:48px;box-shadow:var(--shadow);border-color:var(--line)}
+.mswitch{position:relative}#app>.top{align-items:center;flex-wrap:nowrap}#app>.top>div:first-child{min-width:0;flex:1}#app>.top>.row{margin-left:auto;justify-content:flex-end;flex:none;max-width:62%}
+.mbtn{display:flex;align-items:center;gap:8px;background:var(--panel);font-size:16px;font-weight:600;letter-spacing:-.01em;padding:8px 12px;min-height:44px;box-shadow:var(--shadow);border-color:var(--line)}
 .mbtn:hover,.mbtn[aria-expanded=true]{border-color:var(--accent);box-shadow:var(--glow);filter:none}
 .mico{width:24px;height:24px;flex:none;color:var(--accent)}.chev{width:16px;height:16px;color:var(--muted);transition:transform .2s ease}.mbtn[aria-expanded=true] .chev{transform:rotate(180deg)}
-.mmenu{position:absolute;z-index:15;top:calc(100% + 8px);left:0;min-width:230px;display:grid;gap:2px;background:var(--panel);border:1px solid var(--line);border-radius:18px;box-shadow:0 18px 50px rgb(0 0 0/.2);padding:6px;animation:pop .18s ease both;transform-origin:top left}
+.mmenu{position:absolute;z-index:15;top:calc(100% + 8px);right:0;min-width:230px;display:grid;gap:2px;background:var(--panel);border:1px solid var(--line);border-radius:18px;box-shadow:0 18px 50px rgb(0 0 0/.2);padding:6px;animation:pop .18s ease both;transform-origin:top right}
 .mmenu[hidden]{display:none}
 .mmenu button{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:none;border-radius:12px;padding:10px 12px;font-weight:500;font-size:16px}
 .mmenu button:hover{background:var(--fill);filter:none;transform:none}.mmenu button[aria-current]{background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent);font-weight:600}

@@ -271,8 +271,8 @@ function leaderView(){
   for(const s of mo.services)for(const r of ROLES){if(!(r in s.slots)||s.date<today)continue;const id=s.slots[r];const a=answerOf(id,s.date,r);
     if(!id)open++;else if(!a)wait++;else if(a.a==='yes')yes++;else no++;
     if(!id||a?.a==='no')issues.push({s,r,a,id});else if(wrongDay(id,s.date,r))issues.push({s,r,a,id,wrong:1})}
-  app.innerHTML=`<div class="top"><div><p class="muted">Team dashboard${can()?'':' \u00b7 Supervisor view'}</p><h1>${APP_NAME}</h1></div><div class="row">${V.token?'<button id="mine">My schedule</button>':''}${!can()&&L.data.kidsRole?'<button id="kidsbtn">Kids Ministry</button>':''}${barBtn('refresh','Refresh',ICON_REFRESH)}${barBtn('out','Sign out',ICON_OUT)}</div></div>
-  ${can()?ministryBar('leader'):''}${navBar()}
+  app.innerHTML=`<div class="top"><div><p class="muted">Team dashboard${can()?'':' \u00b7 Supervisor view'}</p><h1>${APP_NAME}</h1></div><div class="row">${V.token?'<button id="mine">My schedule</button>':''}${can()?ministryBar('leader'):''}${!can()&&L.data.kidsRole?'<button id="kidsbtn">Kids Ministry</button>':''}${barBtn('refresh','Refresh',ICON_REFRESH)}${barBtn('out','Sign out',ICON_OUT)}</div></div>
+  ${navBar()}
   ${L.tab==='stats'?statsView():L.tab==='profile'?profileView():L.tab==='avail'?availView():L.tab==='remind'?remindView():L.tab==='shirts'?shirtsView():L.tab==='guides'?guidesView():L.tab==='people'?peopleView():L.tab==='roles'?rolesView():L.tab==='days'?offView():L.tab==='att'?attView():`
   <section class="panel"><div class="row"><select id="month" class="grow" aria-label="Month">${list.map(m=>`<option value="${m}"${m===L.month?' selected':''}>${monthName(m)}${months[m].live?' (live)':''}</option>`).join('')}</select>
   <span class="pill ${mo.live?'yes':'wait'}">${mo.live?'Live':'Not posted'}</span></div>
