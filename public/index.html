@@ -171,13 +171,51 @@ main:has(.land){max-width:440px;padding-top:max(24px,6vh)}.land{gap:14px;padding
 main:has(.land) button.primary,main:has(.land) #parents{min-height:50px;font-size:17px}
 input[type=month],input[type=date]{min-width:150px}.choices button{padding-inline:8px}
 @media (max-width:420px){.groups button{font-size:14px}}
+/* Eight colour themes. Teal is the default; each has a lighter version for dark mode. */
+[data-theme=blue]{--accent:#0064d1}[data-theme=indigo]{--accent:#4b4acf}[data-theme=purple]{--accent:#7a2fd0}[data-theme=pink]{--accent:#c2255c}[data-theme=red]{--accent:#c62828}[data-theme=orange]{--accent:#b84a00}[data-theme=green]{--accent:#1b7a3d}[data-theme=teal]{--accent:#0a6f82}
+@media (prefers-color-scheme:dark){[data-theme=teal]{--accent:#5ac8d8}[data-theme=blue]{--accent:#6cb2ff}[data-theme=indigo]{--accent:#a5a4ff}[data-theme=purple]{--accent:#c9a5ff}[data-theme=pink]{--accent:#ff8fb3}[data-theme=red]{--accent:#ff8a80}[data-theme=orange]{--accent:#ffb072}[data-theme=green]{--accent:#6fd79c}[data-theme]{--on-accent:#0b0b0f}}
+:root{--glow:0 0 0 1px color-mix(in srgb,var(--accent) 55%,transparent),0 6px 22px color-mix(in srgb,var(--accent) 38%,transparent)}
+/* Top bar: brand in the middle, colour button on the right. */
+.bar{padding-inline:12px}.brand{display:flex;align-items:center;gap:8px}
+.bar>button{position:absolute;right:max(12px,env(safe-area-inset-right,0px));width:40px;height:40px;min-height:0;padding:0;display:grid;place-items:center;background:none;color:var(--muted)}
+.bar>button:hover,.bar>button[aria-expanded=true]{background:var(--fill);color:var(--accent);filter:none}.bar>button svg{width:22px;height:22px}
+.pop{position:absolute;z-index:15;background:var(--panel);border:1px solid var(--line);border-radius:18px;box-shadow:0 18px 50px rgb(0 0 0/.2);padding:12px;animation:pop .18s ease both;transform-origin:top right}
+#themes{top:54px;right:max(10px,env(safe-area-inset-right,0px));display:grid;gap:10px;font-weight:500}#themes[hidden]{display:none}
+.swatches{display:grid;grid-template-columns:repeat(4,40px);gap:10px}
+.swatches button{width:40px;height:40px;min-height:0;padding:0;border-radius:50%;background:var(--accent);border:3px solid var(--panel);box-shadow:0 0 0 1px var(--line)}
+.swatches button:hover{transform:scale(1.1);filter:none}.swatches button[aria-pressed=true]{box-shadow:0 0 0 2px var(--accent),0 0 16px color-mix(in srgb,var(--accent) 60%,transparent)}
+/* Ministry switcher. */
+.mswitch{position:relative;justify-self:start}
+.mbtn{display:flex;align-items:center;gap:10px;background:var(--panel);font-size:17px;font-weight:600;letter-spacing:-.01em;padding:9px 14px 9px 12px;min-height:48px;box-shadow:var(--shadow);border-color:var(--line)}
+.mbtn:hover,.mbtn[aria-expanded=true]{border-color:var(--accent);box-shadow:var(--glow);filter:none}
+.mico{width:24px;height:24px;flex:none;color:var(--accent)}.chev{width:16px;height:16px;color:var(--muted);transition:transform .2s ease}.mbtn[aria-expanded=true] .chev{transform:rotate(180deg)}
+.mmenu{position:absolute;z-index:15;top:calc(100% + 8px);left:0;min-width:230px;display:grid;gap:2px;background:var(--panel);border:1px solid var(--line);border-radius:18px;box-shadow:0 18px 50px rgb(0 0 0/.2);padding:6px;animation:pop .18s ease both;transform-origin:top left}
+.mmenu[hidden]{display:none}
+.mmenu button{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:none;border-radius:12px;padding:10px 12px;font-weight:500;font-size:16px}
+.mmenu button:hover{background:var(--fill);filter:none;transform:none}.mmenu button[aria-current]{background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent);font-weight:600}
+.mmenu .ic{width:16px;height:16px;margin:0}
+/* Active controls glow in the theme colour; everything lifts slightly on hover. */
+.subs button[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:var(--on-accent);box-shadow:var(--glow)}
+.tabs button[aria-pressed=true],button.primary:not([disabled]):hover{box-shadow:var(--glow)}
+.subs button:not([aria-pressed=true]):hover,.groups button:not([aria-pressed=true]):hover{color:var(--ink);background:var(--fill);filter:none}
+.groups button[aria-pressed=true],.groups.cats button[aria-pressed=true]{color:var(--accent);box-shadow:0 1px 3px rgb(0 0 0/.12),0 0 0 1px color-mix(in srgb,var(--accent) 35%,transparent),0 4px 14px color-mix(in srgb,var(--accent) 22%,transparent)}
+.panel{transition:box-shadow .2s ease,transform .2s ease}
+@media (hover:hover){.day:hover{background:color-mix(in srgb,var(--accent) 10%,var(--fill))}}
+/* New pages fade and rise in, one block after another. */
+@keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@keyframes pop{from{opacity:0;transform:scale(.96) translateY(-4px)}to{opacity:1;transform:none}}
+#app[data-enter]>*{animation:rise .38s cubic-bezier(.2,.7,.2,1) both}
+#app[data-enter]>*:nth-child(2){animation-delay:.04s}#app[data-enter]>*:nth-child(3){animation-delay:.08s}#app[data-enter]>*:nth-child(4){animation-delay:.12s}#app[data-enter]>*:nth-child(n+5){animation-delay:.16s}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
 @media (min-width:800px){main{padding-top:36px}.panel{padding:24px}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 @media print{.bar{display:none}}
 </style>
 </head>
 <body>
-<header class="bar"><svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="var(--accent)"/><path d="M9 31 32 12l23 19" fill="none" stroke="var(--on-accent)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/><path d="M32 28v24M23 37h18" fill="none" stroke="var(--on-accent)" stroke-width="6.5" stroke-linecap="round"/></svg>Church Hub</header>
+<header class="bar"><span class="brand"><svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="var(--accent)"/><path d="M9 31 32 12l23 19" fill="none" stroke="var(--on-accent)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/><path d="M32 28v24M23 37h18" fill="none" stroke="var(--on-accent)" stroke-width="6.5" stroke-linecap="round"/></svg>Church Hub</span>
+<button id="themebtn" aria-label="Colour theme" aria-expanded="false" aria-controls="themes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.800" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18c1.400 0 2-1 2-2 0-1.500-1-2 0-3 .600-.600 1.500-.500 2.500-.500A4.500 4.500 0 0 0 21 11c0-4.400-4-8-9-8z"/><circle cx="7.800" cy="11.500" r="1"/><circle cx="10.500" cy="7.500" r="1"/><circle cx="15" cy="7.800" r="1"/></svg></button>
+<div id="themes" class="pop" hidden></div></header>
 <main id="app"><p class="muted">Loading the schedule&hellip;</p></main>
 <div id="toast" role="status" hidden></div>
 <script src="/qrcode.js" defer></script>

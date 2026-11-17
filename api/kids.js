@@ -18,6 +18,7 @@ const DEFAULT_ROOMS = [
 const STAFF_ROLES = ['lead', 'teacher', 'assistant', 'checkin'];
 const DIAPERS = ['no', 'diapers', 'pullups', 'training'];
 const MAX_KIDS = 8;
+const THEMES = ['teal', 'blue', 'indigo', 'purple', 'pink', 'red', 'orange', 'green'];
 
 const text = (v, max) => String(v ?? '').trim().slice(0, max);
 const phoneOf = (v) => { const d = String(v ?? '').replace(/\D/g, '').replace(/^1(?=\d{10}$)/, ''); return d.length === 10 ? d : ''; };
@@ -242,6 +243,10 @@ export default route(async (req, res, body) => {
       const ids = (Array.isArray(body.kidIds) ? body.kidIds : []).filter((k) => fam.kids.some((x) => x.id === k));
       if (!ids.length) return bad(res, 400, 'Pick at least one child.');
       await checkIn(date, fam, ids, (await settings()).rooms, 'parent');
+    } else if (action === 'setTheme') {
+      if (!THEMES.includes(body.theme)) return bad(res, 400, 'Pick one of the colours.');
+      fam.theme = body.theme;
+      await save();
     } else if (action === 'psend') {
       if (!(await addMessage(fam.id, 'parent', fam.parent, body.text))) return bad(res, 400, 'Write a message first.');
     } else if (action === 'pseen') {

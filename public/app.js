@@ -23,6 +23,23 @@ const setupAt=d=>SETUP[dt(d).getDay()];
 const setupTag=d=>`<span class="setup">Setup ${setupAt(d)}</span>`;
 const key=(d,r)=>d+'|'+r;
 const store={get(k,o=localStorage){try{return o.getItem(k)}catch{return null}},set(k,v,o=localStorage){try{o.setItem(k,v)}catch{}},del(k,o=localStorage){try{o.removeItem(k)}catch{}}};
+// Colour themes. The choice is kept on this device, and on the person's profile when they are signed in.
+const THEMES=[['teal','Teal'],['blue','Blue'],['indigo','Indigo'],['purple','Purple'],['pink','Pink'],['red','Red'],['orange','Orange'],['green','Green']];
+function applyTheme(t){if(!THEMES.some(x=>x[0]===t))t='teal';document.documentElement.dataset.theme=t;store.set('theme',t);
+  document.querySelectorAll('[data-theme-pick]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.themePick===t)))}
+function pickTheme(t){applyTheme(t);
+  const saved=location.hash==='#parent'&&P.token?api('/api/kids',{action:'setTheme',theme:t},pHdr()):V.token?api('/api/member',{token:V.token,action:'setTheme',theme:t}):null;
+  if(saved)saved.then(()=>toast('Colour saved to your profile.'),()=>toast('Colour saved on this device.'));else toast('Colour saved on this device.')}
+function setupThemes(){const box=document.getElementById('themes'),btn=document.getElementById('themebtn');if(!box)return;
+  box.innerHTML=`<div class="small muted">Colour theme</div><div class="swatches">${THEMES.map(([k,l])=>`<button data-theme-pick="${k}" data-theme="${k}" aria-pressed="false" aria-label="${l}" title="${l}"></button>`).join('')}</div>`;
+  const shut=()=>{box.hidden=true;btn.setAttribute('aria-expanded','false')};
+  btn.onclick=e=>{e.stopPropagation();box.hidden=!box.hidden;btn.setAttribute('aria-expanded',String(!box.hidden))};
+  box.querySelectorAll('[data-theme-pick]').forEach(b=>b.onclick=()=>pickTheme(b.dataset.themePick));
+  addEventListener('click',e=>{if(!e.target.closest('#themes,#themebtn'))shut()});addEventListener('keydown',e=>{if(e.key==='Escape')shut()});
+  applyTheme(store.get('theme'))}
+// Moving to another page or tab fades the new content in. Saving something on the same page doesn't.
+function enter(){app.dataset.enter='1';clearTimeout(enter.t);enter.t=setTimeout(()=>{delete app.dataset.enter},600)}
+addEventListener('click',e=>{if(e.target.closest?.('[data-t],[data-kt],[data-bt],[data-pt],[data-v],[data-min],#dash,#mine,#kidsbtn,#bandbtn,#lead,#parents,#kleave,#bleave'))enter()},true);
 function toast(t){const e=document.getElementById('toast');e.textContent=t;e.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>e.hidden=true,3000)}
 async function api(path,body,headers={}){
   let r;try{r=await fetch(path,{method:'POST',headers:{'content-type':'application/json',...headers},body:JSON.stringify(body)})}
@@ -79,7 +96,7 @@ function pinEnter(msg){
   document.getElementById('f').onsubmit=async e=>{e.preventDefault();
     try{signedIn(await api('/api/member',{action:'login',number:V.number,pin:document.getElementById('pin').value}))}catch(er){pinEnter(er.message)}};
   document.getElementById('pin').focus()}
-function show(r){V.data=r;const ms=r.months.map(x=>x.month);V.month=ms.includes(V.month)?V.month:pickMonth(ms);keep(memberView)}
+function show(r){V.data=r;if(r.theme)applyTheme(r.theme);const ms=r.months.map(x=>x.month);V.month=ms.includes(V.month)?V.month:pickMonth(ms);keep(memberView)}
 function signedIn(r){V.token=r.token;store.set('memberToken',r.token);show(r)}
 async function memberLoad(){
   try{show(await api('/api/member',{token:V.token,action:'load'}))}
@@ -519,4 +536,4 @@ function start(){
   if(location.hash==='#parent')return parentStart();if(location.hash==='#kids')return kidsStart();if(location.hash==='#band')return bandStart();if(location.hash==='#diaconado')return diaconadoStart();
   if(location.hash==='#leader'){if(L.code||V.token)leaderCall({action:'load'});else leaderLogin()}
   else if(V.token)memberLoad();else memberLogin()}
-addEventListener('hashchange',start);start();
+addEventListener('hashchange',()=>{enter();start()});setupThemes();enter();start();

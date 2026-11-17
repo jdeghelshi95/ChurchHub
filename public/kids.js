@@ -8,12 +8,30 @@ const fmtPhone = (p) => p ? `(${p.slice(0, 3)}) ${p.slice(3, 6)}-${p.slice(6)}` 
 
 // The row of ministries at the top of every leader page. Band and Diaconado are being built out.
 const MINISTRIES = [['leader', 'Production'], ['kids', 'Kids'], ['band', 'Band'], ['diaconado', 'Diaconado']];
+const MIN_SVG = (inner) => `<svg class="mico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
+// Production: a computer. Kids: a teacher with two children. Band: a piano keyboard. Diaconado: a person in a suit.
+const MIN_ICON = {
+  leader: MIN_SVG('<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>'),
+  kids: MIN_SVG('<circle cx="12" cy="5.500" r="2.500"/><path d="M7.500 20v-5a4.500 4.500 0 0 1 9 0v5"/><circle cx="4.500" cy="13" r="1.700"/><path d="M2 20v-1.500a2.600 2.600 0 0 1 3.500-2.400"/><circle cx="19.500" cy="13" r="1.700"/><path d="M22 20v-1.500a2.600 2.600 0 0 0-3.500-2.400"/>'),
+  band: MIN_SVG('<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M7.500 18v-5M12 18v-5M16.500 18v-5"/><path d="M6.500 6v7h2V6M11 6v7h2V6M15.500 6v7h2V6" fill="currentColor" stroke-width="1"/>'),
+  diaconado: MIN_SVG('<circle cx="12" cy="6" r="3"/><path d="M5 21v-2a6 6 0 0 1 6-6h2a6 6 0 0 1 6 6v2"/><path d="M12 13.500l-1.300 2 1.300 3.500 1.300-3.500z" fill="currentColor" stroke-width="1"/><path d="M9.300 13.300 12 16l2.700-2.700"/>'),
+};
 function ministryBar(active) {
-  return `<nav class="groups" aria-label="Ministries">${MINISTRIES.map(([h, l]) => `<button data-min="${h}" aria-pressed="${h === active}">${l}</button>`).join('')}</nav>`;
+  const cur = MINISTRIES.find((m) => m[0] === active);
+  return `<div class="mswitch"><button class="mbtn" id="mbtn" aria-haspopup="true" aria-expanded="false" aria-controls="mmenu">${MIN_ICON[cur[0]]}<span>${cur[1]}</span><svg class="chev" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg></button>
+  <div class="mmenu" id="mmenu" role="menu" aria-label="Switch ministry" hidden>${MINISTRIES.map(([h, l]) => `<button role="menuitem" data-min="${h}"${h === active ? ' aria-current="true"' : ''}>${MIN_ICON[h]}<span class="grow">${l}</span>${h === active ? CHK : ''}</button>`).join('')}</div></div>`;
+}
+function closeMinistryMenu() {
+  const m = document.getElementById('mmenu'), b = document.getElementById('mbtn');
+  if (m && !m.hidden) { m.hidden = true; b.setAttribute('aria-expanded', 'false'); }
 }
 function bindMinistryBar() {
-  app.querySelectorAll('[data-min]').forEach((b) => b.onclick = () => { location.hash = b.dataset.min === 'leader' && !(L.code || V.data?.access) ? '' : b.dataset.min; });
+  const b = document.getElementById('mbtn'), m = document.getElementById('mmenu');
+  if (b) b.onclick = (e) => { e.stopPropagation(); m.hidden = !m.hidden; b.setAttribute('aria-expanded', String(!m.hidden)); if (!m.hidden) m.querySelector('[aria-current]')?.focus(); };
+  app.querySelectorAll('[data-min]').forEach((x) => x.onclick = () => { location.hash = x.dataset.min === 'leader' && !(L.code || V.data?.access) ? '' : x.dataset.min; });
 }
+addEventListener('click', (e) => { if (!e.target.closest?.('.mswitch')) closeMinistryMenu(); });
+addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeMinistryMenu(); document.getElementById('mbtn')?.focus(); } });
 function diaconadoStart() {
   app.innerHTML = `<div class="top"><div><p class="muted">Ministries</p><h1>Diaconado</h1></div></div>${ministryBar('diaconado')}
   <section class="panel"><h2>Coming soon</h2><p class="muted">This ministry has a place saved. Scheduling and tools for Diaconado will be added here.</p></section>`;
@@ -78,7 +96,7 @@ function parentLogin(msg) {
   };
 }
 async function parentCall(body, done) {
-  try { P.data = await api('/api/kids', body, pHdr()); keep(parentView); if (done) toast(done); return true; }
+  try { P.data = await api('/api/kids', body, pHdr()); if (P.data.family.theme) applyTheme(P.data.family.theme); keep(parentView); if (done) toast(done); return true; }
   catch (e) {
     if (e.status === 401) { store.del('parentToken'); P.token = null; parentLogin(e.message); }
     else { toast(e.message); if (!P.data) parentLogin(e.message); }
