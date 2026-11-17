@@ -6,14 +6,15 @@
 <title>Church Hub</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600;700&display=swap">
 <style>
 /* Layout: a run-of-show sheet. One narrow column for phones; dates are cue blocks with the role on the left. */
-:root{--bg:#eef1f4;--panel:#fff;--ink:#16202b;--muted:#5b6876;--line:#d5dce3;--accent:#0b6e7f;--on-accent:#fff;
+:root{--bg:#f5f5f7;--panel:#fff;--ink:#1d1d1f;--muted:#6e6e73;--line:#e2e2e7;--fill:rgb(118 118 128/.12);--accent:#0a6f82;--on-accent:#fff;
+--shadow:0 1px 2px rgb(0 0 0/.04),0 10px 30px rgb(0 0 0/.05);
 --yes:#14703f;--yes-bg:#dcf1e4;--no:#b3261e;--no-bg:#fbe3e1;--wait:#8a5a00;--wait-bg:#fbeecb;
 --foh:#1d4ed8;--foh-bg:#dbe7ff;--lyr:#b91c1c;--lyr-bg:#fde2e2;--liv:#a8420a;--liv-bg:#ffe6d2;--cam:#15703d;--cam-bg:#d6f2e0;--wir:#6227c9;--wir-bg:#ece3ff;--pho:#ad1668;--pho-bg:#ffdfef;
---display:'Barlow Condensed','Arial Narrow',sans-serif;--body:'Barlow',system-ui,sans-serif}
-@media (prefers-color-scheme:dark){:root{--bg:#10171e;--panel:#18222c;--ink:#e8edf2;--muted:#9aa8b5;--line:#2c3a47;--accent:#4fc0d3;--on-accent:#06222a;
+--display:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;--body:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif}
+@media (prefers-color-scheme:dark){:root{--bg:#000;--panel:#1c1c1e;--ink:#f5f5f7;--muted:#a1a1a6;--line:#2c2c2e;--fill:rgb(118 118 128/.26);--accent:#5ac8d8;--on-accent:#00252b;--shadow:none;
 --yes:#6fd79c;--yes-bg:#14352a;--no:#ff9a92;--no-bg:#40201e;--wait:#efc66a;--wait-bg:#3a2e12;--foh:#a9c4ff;--foh-bg:#1b2c58;--lyr:#ffa3a3;--lyr-bg:#4a1c1f;--liv:#ffbd8a;--liv-bg:#4c2b12;--cam:#86e3a8;--cam-bg:#123c25;--wir:#cdb4ff;--wir-bg:#322153;--pho:#ffa6d3;--pho-bg:#4f1a38;color-scheme:dark}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.45 var(--body)}
@@ -130,10 +131,53 @@ main>.groups{margin-bottom:-4px}
 @media print{body{background:#fff;color:#000}#app>*:not(#printarea),#toast{display:none!important}main{padding:0;max-width:none;display:block}#printarea{display:block}
 .poster{text-align:center;padding:20mm 10mm;font-size:16pt}.poster h1{font-size:40pt;margin-bottom:6mm}.poster svg{width:110mm;height:110mm;margin:10mm auto;display:block}}
 @page{margin:3mm}
-#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:9px 14px;border-radius:5px;max-width:90vw}
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:color-mix(in srgb,var(--ink) 88%,transparent);color:var(--bg);padding:11px 18px;border-radius:999px;max-width:90vw;font-weight:500;z-index:20;-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);box-shadow:0 8px 30px rgb(0 0 0/.18)}
+/* ---------- Look and feel ---------- */
+body{font-size:16px;line-height:1.47;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+main{max-width:720px;gap:18px;padding-block:24px 72px}
+h1,h2,h3{letter-spacing:-.022em;font-weight:700}h1{font-size:clamp(30px,7vw,40px);line-height:1.07}h2{font-size:22px;line-height:1.15}h3{font-size:18px}
+.top p.muted{font-size:13px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;margin-bottom:4px}
+.bar{position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:center;gap:8px;height:52px;font-weight:700;letter-spacing:-.01em;background:color-mix(in srgb,var(--bg) 72%,transparent);-webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px);border-bottom:1px solid var(--line)}
+.bar svg{width:24px;height:24px}body:has(.land) .bar{display:none}.alert{top:62px}
+.panel{border:0;border-radius:20px;padding:20px;gap:14px;box-shadow:var(--shadow)}
+@media (prefers-color-scheme:dark){.panel{border:1px solid var(--line)}}
+button{border:1px solid transparent;background:var(--fill);border-radius:999px;padding:10px 18px;transition:transform .12s ease,filter .15s ease,background-color .15s ease}
+button:not([disabled]):hover{filter:brightness(.96)}button:not([disabled]):active{transform:scale(.97)}
+button.primary{background:var(--accent);color:var(--on-accent)}button.link{background:none;border-radius:6px;text-underline-offset:3px;transform:none}
+input,select,textarea{background:var(--fill);border:1px solid transparent;border-radius:12px;padding:11px 14px;transition:background-color .15s ease,border-color .15s ease}
+input:focus,select:focus,textarea:focus{background:var(--panel);border-color:var(--accent);outline:0;box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 22%,transparent)}
+input[type=checkbox],input[type=file]{padding:0;border:0;box-shadow:none;accent-color:var(--accent)}
+.pill{padding:3px 10px}.rt{border-radius:8px}
+.groups{border:0;border-radius:13px;overflow:visible;background:var(--fill);padding:3px;gap:2px}
+.groups button{border-radius:10px;background:none;font:600 15px/1.2 var(--body);letter-spacing:-.01em;min-height:38px;padding:6px 4px;color:var(--muted)}.groups button+button{border-left:0}
+.groups button[aria-pressed=true],.groups.cats button[aria-pressed=true]{background:var(--panel);color:var(--ink);box-shadow:0 1px 3px rgb(0 0 0/.12),0 1px 1px rgb(0 0 0/.04)}
+.groups.cats button{font-size:15px;min-height:38px}
+.subs{gap:8px}.subs button{background:none;border-color:var(--line);color:var(--muted);padding:6px 15px}
+.subs button[aria-pressed=true]{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.tabs{gap:8px}.tabs button[aria-pressed=true]{background:var(--accent);color:var(--on-accent)}
+.cue{padding-block:14px}.cue .role{font-size:18px;letter-spacing:-.015em}
+.stats{gap:10px}.stats b{font-size:32px;letter-spacing:-.03em}
+.day{border-radius:14px;padding:12px 14px;text-align:left}.kidpick{border-radius:14px;border-color:var(--line)}
+.choices button,.att button,.sizes button,.thanks .done{border-radius:14px}.thanks{border-radius:16px;padding:14px}
+.cal{gap:6px}.cal .c{border-radius:12px;padding:2px}.cal button.c{background:none}
+.dblock{border-radius:14px;border:0;background:var(--fill);padding:8px 0}.dblock b{letter-spacing:-.03em}
+.setup{font-size:19px;letter-spacing:-.02em}.bigcode{letter-spacing:.1em}
+.line{border-radius:6px 12px 12px 6px}.slot select{border-radius:10px}
+th{font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase}td,th{padding:10px 8px}
+.msg{border-radius:18px;padding:9px 14px}.msg.me{background:var(--accent);color:var(--on-accent)}.msg.me .muted{color:inherit;opacity:.8}
+.vid,.shot{border-radius:16px}.qr{border-radius:16px;box-shadow:var(--shadow)}
+main:has(.land){max-width:440px;padding-top:max(24px,6vh)}.land{gap:14px;padding-block:8px 6px}.logo{width:min(210px,56vw)}.land .muted{font-size:17px}
+.field{font-size:17px;min-height:50px}.lbl{font-size:14px;color:var(--muted);margin-bottom:-8px}
+main:has(.land) button.primary,main:has(.land) #parents{min-height:50px;font-size:17px}
+input[type=month],input[type=date]{min-width:150px}.choices button{padding-inline:8px}
+@media (max-width:420px){.groups button{font-size:14px}}
+@media (min-width:800px){main{padding-top:36px}.panel{padding:24px}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+@media print{.bar{display:none}}
 </style>
 </head>
 <body>
+<header class="bar"><svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="var(--accent)"/><path d="M9 31 32 12l23 19" fill="none" stroke="var(--on-accent)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/><path d="M32 28v24M23 37h18" fill="none" stroke="var(--on-accent)" stroke-width="6.5" stroke-linecap="round"/></svg>Church Hub</header>
 <main id="app"><p class="muted">Loading the schedule&hellip;</p></main>
 <div id="toast" role="status" hidden></div>
 <script src="/qrcode.js" defer></script>
