@@ -40,7 +40,7 @@ function signOutAll() {
 }
 const barActions = (refreshId) => `<span hidden>${barBtn(refreshId, 'Refresh', ICON_REFRESH)}${barBtn('allout', 'Sign out', ICON_OUT)}</span>`;
 function diaconadoStart() {
-  app.innerHTML = `<div class="top"><div><p class="muted">Ministries</p><h1>Diaconado</h1></div></div>${ministryBar('diaconado')}
+  app.innerHTML = `<div class="top"><div><p class="muted">Ministries</p><h1>Diaconado</h1></div><div class="row">${ministryBar('diaconado')}</div></div>
   <section class="panel"><h2>Coming soon</h2><p class="muted">This ministry has a place saved. Scheduling and tools for Diaconado will be added here.</p></section><span hidden>${barBtn('allout', 'Sign out', ICON_OUT)}</span>`;
   app.querySelector('#allout').onclick = signOutAll;
   bindMinistryBar();
@@ -347,8 +347,8 @@ function kidsView() {
   const group = groups.find((g) => g[1].some((t) => t[0] === K.tab));
   const tabs = group[1];
   const body = K.tab === 'desk' ? deskTab() : K.tab === 'chat' ? chatTab() : K.tab === 'materials' ? materialsTab() : K.tab === 'att' ? attendanceTab() : K.tab === 'setup' ? roomsTab() : K.tab === 'families' ? familiesTab() : K.tab === 'staff' ? staffTab() : K.tab === 'sched' ? schedTab(false) : K.tab === 'plan' ? schedTab(true) : todayTab();
-  app.innerHTML = `<div class="top"><div><p class="muted">Kids Ministry · ${esc(ROLE_LABEL[me.level] || '')}</p><h1>${dayName(date)}</h1></div>${isLead() ? '' : '<div class="row"><button id="kleave">Back to my schedule</button></div>'}</div>
-  ${isLead() ? ministryBar('kids') : ''}<nav class="groups cats" aria-label="Kids Ministry sections">${groups.map(([name, list]) => `<button data-kt="${list[0][0]}" aria-pressed="${name === group[0]}">${name}${name === 'Parents' && unread ? ' \u2022' : ''}</button>`).join('')}</nav>
+  app.innerHTML = `<div class="top"><div><p class="muted">Kids Ministry · ${esc(ROLE_LABEL[me.level] || '')}</p><h1>${dayName(date)}</h1></div><div class="row">${isLead() ? ministryBar('kids') : '<button id="kleave">Back to my schedule</button>'}</div></div>
+  <nav class="groups cats" aria-label="Kids Ministry sections">${groups.map(([name, list]) => `<button data-kt="${list[0][0]}" aria-pressed="${name === group[0]}">${name}${name === 'Parents' && unread ? ' \u2022' : ''}</button>`).join('')}</nav>
   <div class="subs">${tabs.map(([t, l]) => `<button data-kt="${t}" aria-pressed="${K.tab === t}">${l}</button>`).join('')}</div>${body}<div id="printarea" aria-hidden="true"></div>${barActions('krefresh')}`;
   app.querySelector('#krefresh').onclick = () => kidsCall({ action: 'sload' }, 'Up to date.');
   app.querySelector('#allout').onclick = signOutAll;

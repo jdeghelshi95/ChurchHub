@@ -72,8 +72,8 @@ function bandView() {
   const { me, editor } = B.data;
   const tabs = [['sets', 'Schedule and setlists'], ['songs', 'Songs and charts'], ['members', 'Members']];
   const top = me.level === 'admin';
-  app.innerHTML = `<div class="top"><div><p class="muted">Band${editor ? ' · Leader' : ''}</p><h1>${esc(me.name === 'Leader' ? APP_NAME : me.name)}</h1></div>${top ? '' : '<div class="row"><button id="bleave">Back to my schedule</button></div>'}</div>
-  ${top ? ministryBar('band') : ''}<div class="subs">${tabs.map(([t, l]) => `<button data-bt="${t}" aria-pressed="${B.tab === t}">${l}</button>`).join('')}</div>
+  app.innerHTML = `<div class="top"><div><p class="muted">Band${editor ? ' · Leader' : ''}</p><h1>${esc(me.name === 'Leader' ? APP_NAME : me.name)}</h1></div><div class="row">${top ? ministryBar('band') : '<button id="bleave">Back to my schedule</button>'}</div></div>
+  <div class="subs">${tabs.map(([t, l]) => `<button data-bt="${t}" aria-pressed="${B.tab === t}">${l}</button>`).join('')}</div>
   ${B.tab === 'songs' ? songsTab() : B.tab === 'members' ? membersTab() : setsTab()}${barActions('brefresh')}`;
   bindMinistryBar();
   app.querySelector('#brefresh').onclick = () => bandCall({ action: 'load' }, 'Up to date.');
