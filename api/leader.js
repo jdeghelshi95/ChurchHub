@@ -161,5 +161,5 @@ export default route(async (req, res, body) => {
   const [answers, off, on, pins, attendance, swaps, guides, settings, shirts] = await Promise.all([readFolder('answers/'), readFolder('off/'), readFolder('on/'), readFolder('pins/'), read('attendance.json'), read('swaps.json'), read('guides.json'), read('settings.json'), read('shirts.json')]);
   const pinSet = Object.fromEntries(people.map((p) => [p.id, !!pins[p.id]?.hash]));
   const shown = level === 'admin' ? people : people.map(({ number, username, ...p }) => p);
-  res.json({ level, people: shown, months, answers, off, on, pinSet, attendance: attendance || {}, swaps: swaps?.items || [], guides: guides || {}, shirtsOff: !!settings?.shirtsOff, shirts: level === 'admin' ? shirts || {} : {} });
+  res.json({ level, kidsRole: people.find((p) => p.id === tokenId(req.headers['x-member-token']))?.kids?.role || null, people: shown, months, answers, off, on, pinSet, attendance: attendance || {}, swaps: swaps?.items || [], guides: guides || {}, shirtsOff: !!settings?.shirtsOff, shirts: level === 'admin' ? shirts || {} : {} });
 });

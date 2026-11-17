@@ -37,14 +37,28 @@ const pickMonth=list=>{const m=today.slice(0,7);return (list.find(x=>x>=m))||lis
 /* ---------- Volunteer ---------- */
 store.del('memberNumber');
 const V={token:store.get('memberToken'),number:null,data:null,month:null,noteFor:null,offMonth:null,view:'schedule'};
-function memberLogin(msg){
-  app.innerHTML=`<div><h1>${APP_NAME}</h1><p class="muted">See your dates and tell us if you can serve.</p></div>
-  <form class="panel" id="f"><label for="num"><h2>Username or member number</h2></label>
-  <input id="num" class="code" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="20" required style="letter-spacing:normal">
-  ${msg?`<p class="err">${esc(msg)}</p>`:''}<button class="primary">See my schedule</button></form>`;
-  document.getElementById('f').onsubmit=async e=>{e.preventDefault();V.number=document.getElementById('num').value.trim();
-    try{const r=await api('/api/member',{action:'start',number:V.number});r.hasPin?pinEnter():pinCreate()}catch(er){memberLogin(er.message)}};
-  document.getElementById('num').focus()}
+// The logo: HUB as the body of a house under a roof with a cross in the gable, and CHURCH beneath.
+const LOGO=`<svg class="logo" viewBox="-14 -26 268 270" role="img" aria-label="Church Hub">
+<path d="M-6 68 120 -14l126 82" fill="none" stroke="var(--accent)" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M120 14v40M107 27h26" fill="none" stroke="var(--accent)" stroke-width="8" stroke-linecap="round"/>
+<text x="120" y="182" text-anchor="middle" textLength="218" lengthAdjust="spacingAndGlyphs" fill="currentColor" style="font:700 160px 'Barlow Condensed','Arial Narrow',sans-serif">HUB</text>
+<text x="13" y="234" textLength="214" lengthAdjust="spacing" fill="currentColor" style="font:600 44px 'Barlow Condensed','Arial Narrow',sans-serif">CHURCH</text></svg>`;
+function memberLogin(msg,num=''){
+  app.innerHTML=`<div class="land">${LOGO}<p class="muted">Every team’s schedule in one place.</p></div>
+  <form class="panel" id="f"><label class="lbl" for="num">Username</label>
+  <input id="num" class="field" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="20" required value="${esc(num)}">
+  <label class="lbl" for="pin">Password</label>
+  <input id="pin" class="field" type="password" inputmode="numeric" autocomplete="current-password" maxlength="6">
+  <p class="small muted">Your password is your 4 to 6 digit PIN. First time here? Enter your username or member number, leave the password blank, and you’ll create one.</p>
+  ${msg?`<p class="err">${esc(msg)}</p>`:''}<button class="primary">Sign in</button></form>
+  <button id="parents" style="justify-self:stretch">Parents: check in my kids</button>
+  <button class="link small" id="lead" style="justify-self:center">Leader sign-in</button>`;
+  document.getElementById('parents').onclick=()=>{location.hash='parent'};
+  document.getElementById('lead').onclick=()=>{location.hash='leader'};
+  document.getElementById('f').onsubmit=async e=>{e.preventDefault();V.number=document.getElementById('num').value.trim();const pin=document.getElementById('pin').value;
+    try{const r=await api('/api/member',{action:'start',number:V.number});if(!r.hasPin)return pinCreate();if(!pin)return memberLogin('Enter your password to sign in.',V.number);
+      signedIn(await api('/api/member',{action:'login',number:V.number,pin}))}catch(er){memberLogin(er.message,V.number)}};
+  document.getElementById(num?'pin':'num').focus()}
 function pinCreate(msg){
   app.innerHTML=`<div><h1>Create your PIN</h1><p class="muted">Choose 4 to 6 digits. You will use this PIN with your member number each time you sign in.</p></div>
   <form class="panel" id="f"><label for="p1"><h2>New PIN</h2></label><input id="p1" class="code" type="password" inputmode="numeric" autocomplete="new-password" maxlength="6" required>
@@ -74,7 +88,7 @@ function memberView(){
   const {me,months,answers}=V.data;const mo=months.find(x=>x.month===V.month);
   const mine=[];for(const m of months)for(const s of m.services)for(const [r,v] of Object.entries(s.slots))if(v.me)mine.push({date:s.date,role:r});
   const upcoming=mine.filter(x=>x.date>=today).sort((a,b)=>a.date.localeCompare(b.date));const replied=upcoming.filter(x=>answers[key(x.date,x.role)]||V.data.off[x.date]).length;
-  app.innerHTML=`${V.data.username?'':`<div class="alert" role="alert"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2.5 20h19zM12 10v4.5M12 17.5v.01"/></svg><span>You don\u2019t have a username yet. Create one to sign in more easily.</span><button id="goname">Create username</button></div>`}<div class="top"><div><p class="muted">${APP_NAME}</p><h1>${esc(me.name)}</h1></div><div class="row">${V.data.access?'<button class="primary" id="dash">Team dashboard</button>':''}<button class="link" id="out">Sign out</button></div></div>
+  app.innerHTML=`${V.data.username?'':`<div class="alert" role="alert"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 2.5 20h19zM12 10v4.5M12 17.5v.01"/></svg><span>You don\u2019t have a username yet. Create one to sign in more easily.</span><button id="goname">Create username</button></div>`}<div class="top"><div><p class="muted">${APP_NAME}</p><h1>${esc(me.name)}</h1></div><div class="row">${V.data.kids?'<button id="kidsbtn">Kids Ministry</button>':''}${V.data.band?'<button id="bandbtn">Band</button>':''}${V.data.access?'<button class="primary" id="dash">Team dashboard</button>':''}<button class="link" id="out">Sign out</button></div></div>
   <div class="tabs"><button data-v="schedule" aria-pressed="${V.view!=='guides'}">My schedule</button><button data-v="guides" aria-pressed="${V.view==='guides'}">Guides</button></div>
   ${V.view==='guides'?myGuides():`${V.data.shirt?'':shirtBox()}
   ${!months.length?`<section class="panel"><h2>No schedule posted yet</h2><p class="muted">Check back once your leader posts the next month.</p></section>`:`
@@ -88,6 +102,8 @@ function memberView(){
   app.querySelectorAll('[data-shirt]').forEach(b=>b.onclick=()=>saveShirt(b));
   app.querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>{V.view=b.dataset.v;memberView();scrollTo(0,0)});
   const da=document.getElementById('dash');if(da)da.onclick=()=>{location.hash='leader'};
+  const kb=document.getElementById('kidsbtn');if(kb)kb.onclick=()=>{location.hash='kids'};
+  const bb=document.getElementById('bandbtn');if(bb)bb.onclick=()=>{location.hash='band'};
   app.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>{V.month=b.dataset.m;memberView()});
   app.querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>answer(b));
   app.querySelectorAll('[data-save]').forEach(b=>b.onclick=()=>saveNote(b));
@@ -231,8 +247,8 @@ function leaderView(){
   for(const s of mo.services)for(const r of ROLES){if(!(r in s.slots)||s.date<today)continue;const id=s.slots[r];const a=answerOf(id,s.date,r);
     if(!id)open++;else if(!a)wait++;else if(a.a==='yes')yes++;else no++;
     if(!id||a?.a==='no')issues.push({s,r,a,id});else if(wrongDay(id,s.date,r))issues.push({s,r,a,id,wrong:1})}
-  app.innerHTML=`<div class="top"><div><p class="muted">Team dashboard${can()?'':' \u00b7 Supervisor view'}</p><h1>${APP_NAME}</h1></div><div class="row">${V.token?'<button id="mine">My schedule</button>':''}<button id="refresh">Refresh</button><button class="link" id="out">Sign out</button></div></div>
-  ${navBar()}
+  app.innerHTML=`<div class="top"><div><p class="muted">Team dashboard${can()?'':' \u00b7 Supervisor view'}</p><h1>${APP_NAME}</h1></div><div class="row">${V.token?'<button id="mine">My schedule</button>':''}${!can()&&L.data.kidsRole?'<button id="kidsbtn">Kids Ministry</button>':''}<button id="refresh">Refresh</button><button class="link" id="out">Sign out</button></div></div>
+  ${can()?ministryBar('leader'):''}${navBar()}
   ${L.tab==='stats'?statsView():L.tab==='profile'?profileView():L.tab==='avail'?availView():L.tab==='remind'?remindView():L.tab==='shirts'?shirtsView():L.tab==='guides'?guidesView():L.tab==='people'?peopleView():L.tab==='roles'?rolesView():L.tab==='days'?offView():L.tab==='att'?attView():`
   <section class="panel"><div class="row"><select id="month" class="grow" aria-label="Month">${list.map(m=>`<option value="${m}"${m===L.month?' selected':''}>${monthName(m)}${months[m].live?' (live)':''}</option>`).join('')}</select>
   <span class="pill ${mo.live?'yes':'wait'}">${mo.live?'Live':'Not posted'}</span></div>
@@ -248,7 +264,8 @@ function leaderView(){
   ${ROLES.filter(r=>r in s.slots).map(r=>`<div class="slot line ${RC[GROUP[r]]}${isMe(s.slots[r])?' mine':''}">${tag(r,isMe(s.slots[r]))}${slotCell(s,r)}${statusPill(answerOf(s.slots[r],s.date,r),!s.slots[r],wrongDay(s.slots[r],s.date,r))}</div>`).join('')}${s.date>=today?markStrip(s.date):''}</details>`}).join('')}</div></section>`}`;
   document.getElementById('out').onclick=()=>{store.del('leaderCode',sessionStorage);store.del('memberToken');L.code=null;V.token=null;V.data=null;L.data=null;location.hash=''};
   const mi=document.getElementById('mine');if(mi)mi.onclick=()=>{location.hash=''};
-  document.getElementById('refresh').onclick=()=>leaderCall({action:'load'},'Up to date.');
+  const kb=document.getElementById('kidsbtn');if(kb)kb.onclick=()=>{location.hash='kids'};
+  document.getElementById('refresh').onclick=()=>leaderCall({action:'load'},'Up to date.');bindMinistryBar();
   app.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{L.tab=b.dataset.t;leaderView()});
   if(L.tab==='stats')return bindStats();
   if(L.tab==='profile')return bindProfile();
@@ -491,13 +508,14 @@ function bindPeople(){
 
 let liveV=null,touched=Date.now();
 ['click','keydown','touchstart'].forEach(e=>addEventListener(e,()=>{touched=Date.now()},{passive:true}));
-function refresh(){if(rolePending)return false;if(location.hash==='#leader'?L.tab==='guides':V.view==='guides')return false;const a=document.activeElement;if(a&&/^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName)&&a.type!=='checkbox')return false;
+function refresh(){if(rolePending||['#parent','#kids','#band','#diaconado'].includes(location.hash))return false;if(location.hash==='#leader'?L.tab==='guides':V.view==='guides')return false;const a=document.activeElement;if(a&&/^(INPUT|SELECT|TEXTAREA)$/.test(a.tagName)&&a.type!=='checkbox')return false;
   if(location.hash==='#leader'&&L.data)leaderCall({action:'load'});else if(V.data&&V.token)api('/api/member',{token:V.token,action:'load'}).then(show).catch(()=>{});return true}
 async function tick(){if(document.hidden||Date.now()-touched>9e5||!(L.data||V.data))return;
   try{const {v}=await (await fetch('/api/ping',{cache:'no-store'})).json();if(v===null)return;if(liveV===null){liveV=v;return}if(v!==liveV&&refresh())liveV=v}catch{}}
 setInterval(tick,15000);addEventListener('visibilitychange',tick);
 L.code=store.get('leaderCode',sessionStorage);
 function start(){
+  if(location.hash==='#parent')return parentStart();if(location.hash==='#kids')return kidsStart();if(location.hash==='#band')return bandStart();if(location.hash==='#diaconado')return diaconadoStart();
   if(location.hash==='#leader'){if(L.code||V.token)leaderCall({action:'load'});else leaderLogin()}
   else if(V.token)memberLoad();else memberLogin()}
 addEventListener('hashchange',start);start();

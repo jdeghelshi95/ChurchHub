@@ -109,12 +109,34 @@ td.num{font-variant-numeric:tabular-nums;letter-spacing:.06em}th{font-size:13px;
 .top3{display:grid;gap:6px}.top3 div{display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:8px;align-items:center;background:var(--rb);border-radius:9px;padding:8px 10px}.top3 b{color:var(--rc);font:700 22px/1 var(--display)}
 .alert{position:sticky;top:8px;z-index:5;display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;background:var(--wait-bg);color:var(--wait);border:2px solid var(--wait);border-radius:12px;padding:10px 12px;font-weight:600;box-shadow:0 4px 14px rgb(0 0 0/.15)}
 .alert svg{width:22px;height:22px;flex:none}.alert span{flex:1;min-width:150px}.alert button{background:var(--wait);color:var(--panel);border-color:var(--wait)}
+.land{display:grid;justify-items:center;gap:10px;text-align:center;padding-block:20px 4px}.logo{width:min(230px,62vw);height:auto;color:var(--ink)}
+.lbl{font-weight:600;margin-bottom:-6px}.field{width:100%;font-size:18px}
+/* Kids Ministry: chat, pickup pass, and printed labels. */
+.chat{display:grid;gap:8px;max-height:46vh;overflow-y:auto;padding:4px}.msg{justify-self:start;max-width:85%;background:var(--bg);border-radius:12px;padding:8px 11px;overflow-wrap:anywhere}.msg.me{justify-self:end;background:var(--foh-bg)}
+.pass{text-align:center;border:2px solid var(--yes)}.pass .row{text-align:left}.qr{justify-self:center;width:170px;background:#fff;padding:10px;border-radius:10px;margin-inline:auto}.qr svg{display:block;width:100%;height:auto}
+.bigcode{font:700 56px/1 var(--display);letter-spacing:.14em;font-variant-numeric:tabular-nums}
+.kidpick{border:1px solid var(--line);border-radius:10px;padding:10px 12px;gap:12px;min-height:52px}.kidpick input{width:22px;height:22px;flex:none}
+.alert.pick{background:var(--no-bg);color:var(--no);border-color:var(--no);font-size:18px}
+#printarea{display:none}
+.label{display:grid;grid-template-columns:1fr auto;gap:3mm;align-items:center;width:58mm;padding:2mm;page-break-after:always;break-after:page;font:500 10pt/1.25 var(--body);color:#000;background:#fff}
+.label.big{width:90mm;font-size:13pt}.label.big .lname{font-size:30pt}.label.big .lcode,.label.big .lcode svg{width:28mm}.label.big .lcode svg{height:28mm}
+.lhead{grid-column:1/-1;font:700 9pt/1.1 var(--body);letter-spacing:.06em;text-transform:uppercase;border-bottom:1pt solid #000;padding-bottom:1mm}
+.lname{font:700 22pt/1 var(--display)}.lwarn{border:1.5pt solid #000;padding:0 1.5mm;font-weight:700;display:block;width:fit-content;margin-block:1mm}.lsmall{font-size:8pt}
+.lcode{display:grid;justify-items:center;gap:1mm;width:20mm}.lcode svg{width:20mm;height:20mm}.lcode b{font:700 14pt/1 var(--display);letter-spacing:.08em}
+.lprev{overflow-x:auto;padding:10px;background:var(--bg);border-radius:10px}.lprev .label{border:1px dashed #888;border-radius:4px;margin-inline:auto}
+main>.groups{margin-bottom:-4px}
+@media print{body{background:#fff;color:#000}#app>*:not(#printarea),#toast{display:none!important}main{padding:0;max-width:none;display:block}#printarea{display:block}
+.poster{text-align:center;padding:20mm 10mm;font-size:16pt}.poster h1{font-size:40pt;margin-bottom:6mm}.poster svg{width:110mm;height:110mm;margin:10mm auto;display:block}}
+@page{margin:3mm}
 #toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:9px 14px;border-radius:5px;max-width:90vw}
 </style>
 </head>
 <body>
 <main id="app"><p class="muted">Loading the schedule&hellip;</p></main>
 <div id="toast" role="status" hidden></div>
-<script src="/app.js"></script>
+<script src="/qrcode.js" defer></script>
+<script src="/kids.js" defer></script>
+<script src="/band.js" defer></script>
+<script src="/app.js" defer></script>
 </body>
 </html>
