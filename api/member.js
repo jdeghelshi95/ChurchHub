@@ -37,7 +37,7 @@ function schedule(me, people, months, answers, off, on, guides, shirt) {
     })),
   }));
   const days = [0, 1, 2, 3].map((i) => (Object.values(me.roles).some((r) => r[i] === '1') ? '1' : '0')).join('');
-  return { me: { name: me.name }, username: me.username || '', months: live, answers, off, on, days, canMon: servesMonday(me), access: me.access || null, myGroups: Object.keys(me.roles), guides: Object.fromEntries(Object.keys(me.roles).map((g) => [g, guides?.[g] || []])), ...shirt, closeAt: closeAt(mySlots(months, me.id).map((s) => s.date)) };
+  return { me: { name: me.name }, username: me.username || '', months: live, answers, off, on, days, canMon: servesMonday(me), access: me.access || null, kids: me.kids?.role || (me.access === 'admin' ? 'admin' : null), myGroups: Object.keys(me.roles), guides: Object.fromEntries(Object.keys(me.roles).map((g) => [g, guides?.[g] || []])), ...shirt, closeAt: closeAt(mySlots(months, me.id).map((s) => s.date)) };
 }
 
 export default route(async (req, res, body) => {
