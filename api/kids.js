@@ -302,6 +302,12 @@ export default route(async (req, res, body) => {
     const ids = (Array.isArray(body.kidIds) ? body.kidIds : []).filter((k) => fam?.kids.some((x) => x.id === k));
     if (!fam || !ids.length) return bad(res, 400, 'Pick a family and at least one child.');
     await checkIn(date, fam, ids, (await settings()).rooms, staff.name);
+  } else if (action === 'markPrinted') {
+    // The print station, or the desk, records what it printed so nothing prints twice.
+    const ids = (Array.isArray(body.kidIds) ? body.kidIds : []).map(String);
+    await updateJson(dayPath(date), (day) => {
+      for (const id of ids) { const e = day.entries?.[id]; if (e && !e.printedAt) e.printedAt = new Date().toISOString(); }
+    });
   } else if (action === 'checkout') {
     let result = 'missing';
     await updateJson(dayPath(date), (day) => {

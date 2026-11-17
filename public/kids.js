@@ -173,13 +173,15 @@ function parentView() {
 }
 
 /* ---------- Kids Team staff ---------- */
-const K = { data: null, tab: 'today', q: '', fam: null, thread: null, code: '', print: null, prof: null, kidEdit: null, fq: '' };
+const K = { data: null, tab: 'today', q: '', fam: null, thread: null, code: '', print: null, prof: null, kidEdit: null, fq: '', station: false, printing: false, deskNew: false };
 const isLead = () => ['admin', 'lead'].includes(K.data.me.level);
 const canTeach = () => isLead() || K.data.me.level === 'teacher';
 
 function kidsStart() {
   if (!L.code) L.code = store.get('leaderCode', sessionStorage);
   if (!L.code && !V.token) { location.hash = ''; return; }
+  // A print station left running picks up where it was after a reload.
+  if (store.get('printStation') === '1') { K.station = true; K.tab = 'station'; }
   kidsCall({ action: 'sload' });
 }
 async function kidsCall(body, done) {
@@ -212,13 +214,56 @@ function childLabel(o, d) {
   ${o.parent ? `<div class="lsmall">Parent: ${esc(d.parent)}</div>` : ''}${o.date ? `<div class="lsmall">${esc(d.day)}</div>` : ''}${o.footer ? `<div class="lsmall">${esc(o.footer)}</div>` : ''}</div>
   <div class="lcode">${d.qr}<b>${esc(d.code)}</b></div></div>`;
 }
-function labelSheet(f) {
+function labelSheet(f, only, withPass = true) {
   const { date, rooms, entries, label } = K.data;
-  const mine = entries.filter((e) => e.fid === f.id && !e.outAt);
+  const all = entries.filter((e) => e.fid === f.id && !e.outAt);
+  const mine = only ? all.filter((e) => only.includes(e.kidId)) : all;
   const qr = qrSvg(passText(date, f.code), 4);
   const day = dayName(date);
   return `${mine.map((e) => childLabel(label, { name: e.name, age: e.info?.age, room: roomName(rooms, e.roomId), allergies: e.info?.allergies, medical: e.info?.medical, parent: f.parent, day, code: f.code, qr })).join('')}
-  <div class="label${label.big ? ' big' : ''}">${label.header ? `<div class="lhead">${esc(label.header)}</div>` : ''}<div class="ltext"><div class="lname" style="font-size:16pt">PICKUP PASS</div><div><b>${esc(f.parent)}</b></div>${mine.map((e) => `<div>${esc(e.name)} · ${esc(roomName(rooms, e.roomId))}</div>`).join('')}<div class="lsmall">${day} · Show this to pick up</div></div><div class="lcode">${qr}<b>${esc(f.code)}</b></div></div>`;
+  ${withPass ? `<div class="label${label.big ? ' big' : ''}">${label.header ? `<div class="lhead">${esc(label.header)}</div>` : ''}<div class="ltext"><div class="lname" style="font-size:16pt">PICKUP PASS</div><div><b>${esc(f.parent)}</b></div>${all.map((e) => `<div>${esc(e.name)} · ${esc(roomName(rooms, e.roomId))}</div>`).join('')}<div class="lsmall">${day} · Show this to pick up</div></div><div class="lcode">${qr}<b>${esc(f.code)}</b></div></div>` : ''}`;
+}
+// Families with labels still to print. A family gets its pickup pass the first time any of its labels print.
+function printQueue() {
+  const { families, entries } = K.data;
+  const live = entries.filter((e) => !e.outAt);
+  return families.map((f) => {
+    const mine = live.filter((e) => e.fid === f.id);
+    const waiting = mine.filter((e) => !e.printedAt);
+    return { f, waiting, printed: mine.filter((e) => e.printedAt), withPass: waiting.length === mine.length };
+  }).filter((x) => x.waiting.length || x.printed.length);
+}
+function stationTab() {
+  const q = printQueue();
+  const waiting = q.filter((x) => x.waiting.length), done = q.filter((x) => x.printed.length);
+  const names = (list) => list.map((e) => esc(e.name)).join(', ');
+  return `<section class="panel${K.station ? ' pass' : ''}"><div class="top"><h2>Print station</h2><span class="pill ${K.station ? 'yes' : 'wait'}">${K.station ? CHK + 'On' : 'Off'}</span></div>
+  <p class="small muted" style="text-align:left">Leave this page open on the computer connected to the label printer. When a family checks in, on their own phone or at the desk, their labels and pickup pass print here on their own. Keep this tab in front; it pauses if the page is hidden.</p>
+  <button class="primary" id="stationtoggle">${K.station ? 'Stop the print station' : 'Start the print station'}</button>
+  ${K.station ? `<p class="small" style="text-align:left">${waiting.length ? 'Printing…' : 'Waiting for the next check-in.'}</p>` : ''}</section>
+  <section class="panel"><div class="top"><h2>Waiting to print</h2><span class="muted small">${waiting.length}</span></div>
+  ${waiting.map((x) => `<div class="row"><span class="grow"><b>${esc(x.f.parent)}</b><br><span class="small muted">Code ${esc(x.f.code)} · ${names(x.waiting)}</span></span>${K.station ? '' : `<button data-printnow="${x.f.id}">Print now</button>`}</div>`).join('') || '<p class="muted">Nothing is waiting.</p>'}</section>
+  <section class="panel"><div class="top"><h2>Printed today</h2><span class="muted small">${done.length}</span></div>
+  ${done.map((x) => `<div class="row"><span class="grow"><b>${esc(x.f.parent)}</b><br><span class="small muted">Code ${esc(x.f.code)} · ${names(x.printed)}</span></span><button data-print="${x.f.id}">Print again</button></div>`).join('') || '<p class="muted">Nothing has printed yet.</p>'}</section>
+  <section class="panel"><h2>Printing without a pop-up</h2><p class="small muted">Browsers ask before each print unless told otherwise. On the station computer, set the Brother label printer as the default printer and open Chrome with kiosk printing turned on (the <b>--kiosk-printing</b> option on its shortcut). Labels then print with no window to click.</p></section>`;
+}
+// Prints whatever is waiting, then records it as printed. Runs each time the station page redraws.
+function stationRun(only) {
+  if (K.printing || (!only && !(K.station && K.tab === 'station'))) return;
+  const jobs = printQueue().filter((x) => x.waiting.length && (!only || x.f.id === only));
+  if (!jobs.length) return;
+  K.printing = true;
+  const area = document.getElementById('printarea');
+  area.className = 'labels';
+  area.innerHTML = jobs.map((x) => labelSheet(x.f, x.waiting.map((e) => e.kidId), x.withPass)).join('');
+  const kidIds = jobs.flatMap((x) => x.waiting.map((e) => e.kidId));
+  setTimeout(async () => {
+    window.print();
+    try { K.data = await api('/api/kids', { action: 'markPrinted', kidIds }, hdr()); }
+    catch (e) { K.station = false; store.del('printStation'); toast('The print station stopped: ' + e.message); }
+    K.printing = false;
+    kidsView();
+  }, 60);
 }
 function deskTab() {
   const { families, rooms, entries } = K.data;
@@ -228,11 +273,13 @@ function deskTab() {
   const inIds = new Set(entries.filter((e) => !e.outAt).map((e) => e.kidId));
   const ready = families.filter((f) => f.code && entries.some((e) => e.fid === f.id && !e.outAt));
   return `<section class="panel"><h2>Find a family</h2><input id="kq" placeholder="Parent name, phone or child’s name" value="${esc(K.q)}" aria-label="Search families">
-  ${found.map((f) => `<button class="day" data-fam="${f.id}" aria-pressed="${f.id === K.fam}"><span>${esc(f.parent)}<br><span class="small muted">${esc(f.kids.map((k) => k.name).join(', ') || 'No children added')}</span></span><span class="small muted">…${f.phone.slice(-4)}</span></button>`).join('') || (q ? '<p class="muted">No family matches. Parents register on their own phone from the door poster.</p>' : '<p class="small muted">Parents can also check in on their own phone. Their labels appear below, ready to print.</p>')}</section>
+  ${found.map((f) => `<button class="day" data-fam="${f.id}" aria-pressed="${f.id === K.fam}"><span>${esc(f.parent)}<br><span class="small muted">${esc(f.kids.map((k) => k.name).join(', ') || 'No children added')}</span></span><span class="small muted">…${f.phone.slice(-4)}</span></button>`).join('') || (q ? '<p class="muted">No family matches. Create a profile for them below.</p>' : '<p class="small muted">Parents can also check in on their own phone. Their labels appear below, or print on their own at the print station.</p>')}
+  ${K.deskNew ? `<form id="desknewform" style="display:grid;gap:8px"><h3>New family profile</h3><input id="dparent" placeholder="Parent’s name" maxlength="60" aria-label="Parent’s name" required><input id="dphone" type="tel" placeholder="Mobile number" maxlength="20" aria-label="Mobile number" required>
+  <div class="row"><button class="primary">Create and add children</button><button type="button" id="desknewcancel">Cancel</button></div></form>` : '<button id="desknew">Create a profile for a new family</button>'}</section>
   ${fam ? `<section class="panel"><h2>${esc(fam.parent)}</h2>${fam.kids.map((k) => `<label class="check kidpick"><input type="checkbox" data-sk="${k.id}"${inIds.has(k.id) ? ' disabled' : ' checked'}><span class="grow"><b>${esc(k.name)}</b><br><span class="small muted">Age ${k.age} · ${esc(roomName(rooms, k.roomId))}${k.allergies ? ' · Allergy: ' + esc(k.allergies) : ''}${inIds.has(k.id) ? ' · Checked in' : ''}</span></span></label>`).join('') || '<p class="muted">This family hasn’t added any children yet.</p>'}
   ${fam.kids.some((k) => !inIds.has(k.id)) ? '<button class="primary" id="sdo">Check in and print labels</button>' : ''}</section>` : ''}
   <section class="panel"><h2>Labels</h2><p class="small muted">One label per child and one pickup pass per family, all with the same code. Choose the Brother label printer in the print window.</p>
-  ${ready.map((f) => `<div class="row"><span class="grow"><b>${esc(f.parent)}</b><br><span class="small muted">Code ${esc(f.code)} · ${entries.filter((e) => e.fid === f.id && !e.outAt).map((e) => esc(e.name)).join(', ')}</span></span><button data-print="${f.id}">Print labels</button></div>`).join('') || '<p class="muted">Nobody is checked in yet.</p>'}</section>`;
+  ${ready.map((f) => `<div class="row"><span class="grow"><b>${esc(f.parent)}</b><br><span class="small muted">Code ${esc(f.code)} · ${entries.filter((e) => e.fid === f.id && !e.outAt).map((e) => esc(e.name)).join(', ')}</span></span><span class="pill ${entries.some((e) => e.fid === f.id && !e.outAt && !e.printedAt) ? 'wait' : 'yes'}">${entries.some((e) => e.fid === f.id && !e.outAt && !e.printedAt) ? 'Not printed' : CHK + 'Printed'}</span><button data-print="${f.id}">Print labels</button></div>`).join('') || '<p class="muted">Nobody is checked in yet.</p>'}</section>`;
 }
 function chatTab() {
   const { chats } = K.data;
@@ -292,6 +339,7 @@ function familiesTab() {
   const f = families.find((x) => x.id === K.prof);
   if (f && K.kidEdit) return kidForm(K.kidEdit === 'new' ? {} : f.kids.find((k) => k.id === K.kidEdit));
   if (f) return `<section class="panel"><div class="top"><h2>Family profile</h2><button id="fback">All families</button></div>
+  ${f.kids.length ? '<button class="primary" id="fcheckin">Check in this family</button>' : ''}
   <form id="fprof" style="display:grid;gap:8px"><label class="lbl" for="fparent">Main parent</label><div class="row"><input id="fparent" class="grow" maxlength="60" value="${esc(f.parent)}" required><button>Save name</button></div></form>
   <div class="row small"><span class="grow muted">Mobile: ${esc(fmtPhone(f.phone))}</span><span class="pill ${f.hasPin ? 'yes' : 'wait'}">${f.hasPin ? 'Parent has signed in' : 'Parent hasn’t set a PIN yet'}</span></div></section>
   <section class="panel"><div class="top"><h2>Children</h2><button class="primary" id="faddkid">Add a child</button></div>
@@ -339,19 +387,20 @@ function kidsView() {
   const unread = chats.filter((c) => c.unread).length;
   const groups = [
     ['Teachers', [['today', 'Rooms and pickup'], ['sched', 'Schedule'], ['materials', 'Teaching material']]],
-    ['Check-in', [['desk', 'Check-in desk'], ['att', 'Attendance']]],
+    ['Check-in', [['desk', 'Check-in desk'], ['station', 'Print station'], ['att', 'Attendance']]],
     ['Parents', [['families', 'Families'], ['chat', 'Messages' + (unread ? ` (${unread})` : '')]]],
     ...(isLead() ? [['Admin', [['staff', 'Staff'], ['plan', 'Build schedule'], ['setup', 'Rooms and labels']]]] : []),
   ];
   if (!groups.some((g) => g[1].some((t) => t[0] === K.tab))) K.tab = 'today';
   const group = groups.find((g) => g[1].some((t) => t[0] === K.tab));
   const tabs = group[1];
-  const body = K.tab === 'desk' ? deskTab() : K.tab === 'chat' ? chatTab() : K.tab === 'materials' ? materialsTab() : K.tab === 'att' ? attendanceTab() : K.tab === 'setup' ? roomsTab() : K.tab === 'families' ? familiesTab() : K.tab === 'staff' ? staffTab() : K.tab === 'sched' ? schedTab(false) : K.tab === 'plan' ? schedTab(true) : todayTab();
+  const body = K.tab === 'desk' ? deskTab() : K.tab === 'station' ? stationTab() : K.tab === 'chat' ? chatTab() : K.tab === 'materials' ? materialsTab() : K.tab === 'att' ? attendanceTab() : K.tab === 'setup' ? roomsTab() : K.tab === 'families' ? familiesTab() : K.tab === 'staff' ? staffTab() : K.tab === 'sched' ? schedTab(false) : K.tab === 'plan' ? schedTab(true) : todayTab();
   app.innerHTML = `<div class="top"><div><p class="muted">Kids Ministry · ${esc(ROLE_LABEL[me.level] || '')}</p><h1>${dayName(date)}</h1></div><div class="row">${isLead() ? ministryBar('kids') : '<button id="kleave">Back to my schedule</button>'}</div></div>
   <nav class="groups cats" aria-label="Kids Ministry sections">${groups.map(([name, list]) => `<button data-kt="${list[0][0]}" aria-pressed="${name === group[0]}">${name}${name === 'Parents' && unread ? ' \u2022' : ''}</button>`).join('')}</nav>
   <div class="subs">${tabs.map(([t, l]) => `<button data-kt="${t}" aria-pressed="${K.tab === t}">${l}</button>`).join('')}</div>${body}<div id="printarea" aria-hidden="true"></div>${barActions('krefresh')}`;
   app.querySelector('#krefresh').onclick = () => kidsCall({ action: 'sload' }, 'Up to date.');
   app.querySelector('#allout').onclick = signOutAll;
+  stationRun();
   const kl = document.getElementById('kleave'); if (kl) kl.onclick = () => { location.hash = ''; };
   bindMinistryBar();
   app.querySelectorAll('[data-kt]').forEach((b) => b.onclick = () => { K.tab = b.dataset.kt; K.kidEdit = null; kidsView(); scrollTo(0, 0); });
@@ -371,7 +420,7 @@ function kidsView() {
   const kq = document.getElementById('kq');
   if (kq) kq.oninput = () => { K.q = kq.value; kidsView(); const n = document.getElementById('kq'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); };
   each('[data-fam]', (b) => b.onclick = () => { K.fam = b.dataset.fam; kidsView(); });
-  on('sdo', async () => { const kidIds = [...app.querySelectorAll('[data-sk]:checked:not(:disabled)')].map((c) => c.dataset.sk); if (!kidIds.length) return toast('Pick at least one child.'); const fid = K.fam; if (await kidsCall({ action: 'scheckin', fid, kidIds }, 'Checked in.')) printHtml(labelSheet(K.data.families.find((f) => f.id === fid)), 'labels'); });
+  on('sdo', async () => { const kidIds = [...app.querySelectorAll('[data-sk]:checked:not(:disabled)')].map((c) => c.dataset.sk); if (!kidIds.length) return toast('Pick at least one child.'); const fid = K.fam; if (await kidsCall({ action: 'scheckin', fid, kidIds }, 'Checked in.')) stationRun(fid); });
   each('[data-print]', (b) => b.onclick = () => printHtml(labelSheet(K.data.families.find((f) => f.id === b.dataset.print)), 'labels'));
   // Messages
   each('[data-thread]', (b) => b.onclick = () => { K.thread = b.dataset.thread; const c = K.data.chats.find((x) => x.fid === K.thread); if (c?.unread) { c.unread = false; api('/api/kids', { action: 'sseen', fid: K.thread }, hdr()).catch(() => {}); } kidsView(); scrollChat(); });
@@ -388,6 +437,18 @@ function kidsView() {
   on('sfill', () => kidsCall({ action: 'schedFill' }, 'Filled every spot it could.'));
   each('[data-slot]', (sel) => sel.onchange = () => kidsCall({ action: 'schedSlot', serviceId: sel.dataset.svc, slotId: sel.dataset.slot, personId: sel.value }, 'Saved.'));
   each('[data-delsvc]', (b) => b.onclick = () => { if (b.dataset.sure) return kidsCall({ action: 'schedRemove', id: b.dataset.delsvc }, 'Service deleted.'); b.dataset.sure = '1'; b.textContent = 'Tap again to delete'; });
+  // New family from the desk, and the print station
+  on('desknew', () => { K.deskNew = true; kidsView(); document.getElementById('dparent').focus(); });
+  on('desknewcancel', () => { K.deskNew = false; kidsView(); });
+  on('desknewform', async (e) => { e.preventDefault(); if (await kidsCall({ action: 'famCreate', parent: kval('dparent'), phone: kval('dphone') }, 'Profile created. Add the children.')) { K.deskNew = false; K.prof = K.data.newFamily; K.kidEdit = 'new'; K.tab = 'families'; kidsView(); scrollTo(0, 0); } });
+  on('fcheckin', () => { const f = K.data.families.find((x) => x.id === K.prof); K.fam = f.id; K.q = f.parent; K.prof = null; K.tab = 'desk'; kidsView(); scrollTo(0, 0); });
+  on('stationtoggle', async () => {
+    K.station = !K.station;
+    if (K.station) { store.set('printStation', '1'); try { K.wake = await navigator.wakeLock?.request('screen'); } catch { /* the screen may sleep; printing still works while it is awake */ } }
+    else { store.del('printStation'); K.wake?.release?.(); }
+    kidsView();
+  });
+  each('[data-printnow]', (b) => b.onclick = () => stationRun(b.dataset.printnow));
   // Families
   const fam = (b, msg) => kidsCall({ ...b, fid: K.prof }, msg);
   const fq = document.getElementById('fq');
@@ -456,3 +517,7 @@ setInterval(() => {
   if (location.hash === '#parent' && P.data && P.token && !P.edit) parentCall({ action: 'pload' });
   else if (location.hash === '#kids' && K.data) kidsCall({ action: 'sload' });
 }, 12000);
+// A running print station checks for new check-ins every few seconds.
+setInterval(() => {
+  if (!document.hidden && location.hash === '#kids' && K.data && K.station && K.tab === 'station' && !K.printing) kidsCall({ action: 'sload' });
+}, 4000);
