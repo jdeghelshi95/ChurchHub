@@ -1,4 +1,5 @@
 import { GROUP, pickFor, readFolder, updateJson } from './store.js';
+import { otherBusy, asOff } from './busy.js';
 
 const BIT = { 5: 0, 6: 1, 0: 2, 1: 3 };
 const said = (answers, id, date) => Object.entries(answers[id] || {}).some(([k, v]) => k.startsWith(date + '|') && v.a === 'no');
@@ -22,7 +23,8 @@ function choose(month, service, role, fromId, people, answers, off, on) {
 // With firm set, a slot only moves when someone who picked that day can take it.
 export async function autoSwap(fromId, targets, people, anyMonth = false, firm = false) {
   if (!targets.length) return [];
-  const [answers, off, on] = await Promise.all([readFolder('answers/'), readFolder('off/'), readFolder('on/')]);
+  const [answers, offDays, on, busy] = await Promise.all([readFolder('answers/'), readFolder('off/'), readFolder('on/'), otherBusy('production')]);
+  const off = asOff(busy, offDays);
   const today = new Date().toISOString().slice(0, 10);
   let done = [];
   await updateJson('months.json', (months) => {

@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { autoSwap, mySlots } from './_lib/swap.js';
+import { myOtherDates } from './_lib/busy.js';
 import { load, read, write, updateJson, route, keyOf, answersPath, pinPath, offPath, onPath, isServiceDate, hashPin, weakPin, makeToken, tokenId, tokenValid, SHIRT_SIZES, cutoffAt, pastCutoff } from './_lib/store.js';
 
 const misses = new Map();
@@ -27,7 +28,7 @@ const closeAt = (mine = []) => {
 };
 const servesMonday = (me) => ['FOH', 'Lyrics', 'Livestream', 'CamSteady'].some((g) => me.roles[g]);
 
-function schedule(me, people, months, answers, off, on, guides, shirt) {
+function schedule(me, people, months, answers, off, on, guides, shirt, other = []) {
   const names = Object.fromEntries(people.map((p) => [p.id, p.name]));
   const live = Object.values(months).filter((x) => x.live).sort((a, b) => a.month.localeCompare(b.month)).map((x) => ({
     month: x.month,
@@ -37,7 +38,7 @@ function schedule(me, people, months, answers, off, on, guides, shirt) {
     })),
   }));
   const days = [0, 1, 2, 3].map((i) => (Object.values(me.roles).some((r) => r[i] === '1') ? '1' : '0')).join('');
-  return { me: { name: me.name }, username: me.username || '', months: live, answers, off, on, days, canMon: servesMonday(me), access: me.access || null, kids: me.kids?.role || (me.access === 'admin' ? 'admin' : null), band: me.band?.role || (me.access === 'admin' ? 'admin' : null), myGroups: Object.keys(me.roles), guides: Object.fromEntries(Object.keys(me.roles).map((g) => [g, guides?.[g] || []])), ...shirt, closeAt: closeAt(mySlots(months, me.id).map((s) => s.date)) };
+  return { me: { name: me.name }, username: me.username || '', months: live, answers, off, on, days, canMon: servesMonday(me), access: me.access || null, other, kids: me.kids?.role || (me.access === 'admin' ? 'admin' : null), band: me.band?.role || (me.access === 'admin' ? 'admin' : null), myGroups: Object.keys(me.roles), guides: Object.fromEntries(Object.keys(me.roles).map((g) => [g, guides?.[g] || []])), ...shirt, closeAt: closeAt(mySlots(months, me.id).map((s) => s.date)) };
 }
 
 export default route(async (req, res, body) => {
@@ -69,7 +70,7 @@ export default route(async (req, res, body) => {
       const salt = randomBytes(16).toString('hex');
       await write(path, { salt, hash: hashPin(pin, salt), fails: 0, lockUntil: 0 });
       const answers = (await read(answersPath(me.id))) || {};
-      return res.json({ token: makeToken(me.id, salt), ...schedule(me, people, months, answers, await readOff(me.id), await readOn(me.id), await read('guides.json'), await shirtInfo(me)) });
+      return res.json({ token: makeToken(me.id, salt), ...schedule(me, people, months, answers, await readOff(me.id), await readOn(me.id), await read('guides.json'), await shirtInfo(me), await myOtherDates(me.id)) });
     }
 
     if (!rec.hash) return res.status(409).json({ error: 'Create a PIN first.' });
@@ -83,7 +84,7 @@ export default route(async (req, res, body) => {
     }
     if (rec.fails) await write(path, { ...rec, fails: 0, lockUntil: 0 });
     const answers = (await read(answersPath(me.id))) || {};
-    return res.json({ token: makeToken(me.id, rec.salt), ...schedule(me, people, months, answers, await readOff(me.id), await readOn(me.id), await read('guides.json'), await shirtInfo(me)) });
+    return res.json({ token: makeToken(me.id, rec.salt), ...schedule(me, people, months, answers, await readOff(me.id), await readOn(me.id), await read('guides.json'), await shirtInfo(me), await myOtherDates(me.id)) });
   }
 
   const id = tokenId(body.token);
@@ -146,5 +147,5 @@ export default route(async (req, res, body) => {
     return res.json({ answers, off, swapped: swaps.length, cover });
   }
 
-  res.json(schedule(me, people, months, answers, off, await readOn(me.id), await read('guides.json'), await shirtInfo(me)));
+  res.json(schedule(me, people, months, answers, off, await readOn(me.id), await read('guides.json'), await shirtInfo(me), await myOtherDates(me.id)));
 });

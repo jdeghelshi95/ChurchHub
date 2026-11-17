@@ -1,5 +1,6 @@
 import { createHash, timingSafeEqual, randomInt } from 'node:crypto';
 import { autoSwap } from './_lib/swap.js';
+import { otherBusy, asOff } from './_lib/busy.js';
 import { load, read, write, readFolder, updateJson, route, answersPath, pinPath, offPath, onPath, isServiceDate, buildMonth, GROUP, tokenId, tokenValid, ytId, SHIRT_SIZES } from './_lib/store.js';
 
 const sha = (s) => createHash('sha256').update(String(s)).digest();
@@ -31,6 +32,8 @@ export default route(async (req, res, body) => {
     if (!service || !(role in service.slots)) return res.status(404).json({ error: 'That slot no longer exists.' });
     const person = personId ? people.find((p) => p.id === personId) : null;
     if (personId && !person?.roles[GROUP[role]]) return res.status(400).json({ error: 'That person isn’t qualified for this role.' });
+    const elsewhere = personId && (await otherBusy('production'))[date]?.[personId];
+    if (elsewhere) return res.status(409).json({ error: `${person.name} is already serving that day (${elsewhere}). Pick someone else, or free them up there first.` });
     service.slots[role] = personId || '';
     await updateJson('months.json', (all) => {
       const s = all[month]?.services.find((x) => x.date === date);
@@ -44,7 +47,7 @@ export default route(async (req, res, body) => {
   } else if (action === 'createMonth') {
     if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month || '')) return res.status(400).json({ error: 'Pick a month first.' });
     if (mo) return res.status(409).json({ error: 'That month already exists.' });
-    months[month] = buildMonth(month, people, months, await readFolder('off/'), await readFolder('on/'));
+    months[month] = buildMonth(month, people, months, asOff(await otherBusy('production'), await readFolder('off/')), await readFolder('on/'));
     await write('months.json', months);
   } else if (action === 'addPerson') {
     const name = String(body.name || '').trim().slice(0, 60);
@@ -161,5 +164,5 @@ export default route(async (req, res, body) => {
   const [answers, off, on, pins, attendance, swaps, guides, settings, shirts] = await Promise.all([readFolder('answers/'), readFolder('off/'), readFolder('on/'), readFolder('pins/'), read('attendance.json'), read('swaps.json'), read('guides.json'), read('settings.json'), read('shirts.json')]);
   const pinSet = Object.fromEntries(people.map((p) => [p.id, !!pins[p.id]?.hash]));
   const shown = level === 'admin' ? people : people.map(({ number, username, ...p }) => p);
-  res.json({ level, kidsRole: people.find((p) => p.id === tokenId(req.headers['x-member-token']))?.kids?.role || null, people: shown, months, answers, off, on, pinSet, attendance: attendance || {}, swaps: swaps?.items || [], guides: guides || {}, shirtsOff: !!settings?.shirtsOff, shirts: level === 'admin' ? shirts || {} : {} });
+  res.json({ level, busy: await otherBusy('production'), kidsRole: people.find((p) => p.id === tokenId(req.headers['x-member-token']))?.kids?.role || null, people: shown, months, answers, off, on, pinSet, attendance: attendance || {}, swaps: swaps?.items || [], guides: guides || {}, shirtsOff: !!settings?.shirtsOff, shirts: level === 'admin' ? shirts || {} : {} });
 });
